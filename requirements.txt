@@ -1,0 +1,15 @@
+# Rentang versi, bukan versi pasti — supaya aman di Python 3.10 sampai 3.13.
+fastapi>=0.110,<1.0
+uvicorn[standard]>=0.27,<1.0
+SQLAlchemy>=2.0,<2.1
+pydantic>=2.6,<3.0
+pydantic-settings>=2.2,<3.0
+httpx>=0.27,<1.0
+beautifulsoup4>=4.12,<5.0
+lxml>=5.0
+python-dateutil>=2.9
+pytest>=8.0
+
+# Opsional — hanya dipakai bila mengambil harga lewat penyedia daring.
+# Lewati saja bila harga diimpor dari berkas CSV.
+# yfinance>=0.2.40

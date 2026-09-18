@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Analisis Sentimen Berita Emiten</title>
+<link rel="stylesheet" href="/statis/gaya.css" />
+</head>
+<body>
+<header class="bar">
+  <div class="brand"><span class="dot"></span> Sentimen Emiten</div>
+  <nav class="akun">
+    <span id="siapa" class="redup"></span>
+    <button id="tombol-masuk" class="kecil">Masuk</button>
+    <a href="/docs" target="_blank" rel="noreferrer">Dokumentasi API</a>
+  </nav>
+</header>
+
+<main>
+  <section class="panel" id="panel-masuk" hidden>
+    <h2>Masuk</h2>
+    <div class="kendali">
+      <label>Email <input id="masuk-email" type="email" autocomplete="username" /></label>
+      <label>Kata sandi
+        <input id="masuk-sandi" type="password" autocomplete="current-password" />
+      </label>
+      <button id="kirim-masuk">Masuk</button>
+    </div>
+    <p class="galat" id="galat-masuk" hidden></p>
+    <p class="ket">Akun dibuat lewat <code>python -m scripts.buat_pengguna</code>.</p>
+  </section>
+
+  <section class="kartu-baris" id="ringkasan"></section>
+
+  <section class="panel" id="panel-watchlist" hidden>
+    <div class="kepala-panel">
+      <h2>Watchlist saya</h2>
+      <button id="tambah-watchlist" class="kecil">+ tambah emiten terpilih</button>
+    </div>
+    <div id="watchlist"></div>
+  </section>
+
+  <section class="panel">
+    <div class="kendali">
+      <label>Emiten
+        <select id="cari">
+          <option value="">— pilih emiten —</option>
+        </select>
+      </label>
+      <label>Mulai <input type="date" id="mulai" /></label>
+      <label>Sampai <input type="date" id="sampai" /></label>
+      <label>Cepat
+        <span class="pintasan" id="pintasan">
+          <button class="kecil" data-hari="7">7h</button>
+          <button class="kecil" data-hari="30">30h</button>
+          <button class="kecil" data-hari="90">90h</button>
+          <button class="kecil" data-ytd="1">YTD</button>
+          <button class="kecil" data-semua="1">Semua</button>
+        </span>
+      </label>
+      <label>Lag (hari)
+        <select id="lag"><option>0</option><option>1</option><option>2</option><option>3</option><option>5</option></select>
+      </label>
+      <label title="Membuang berita yang menyebut lebih banyak emiten dari ini. Dipakai untuk menguji apakah sinyalnya bertahan tanpa artikel rekap pasar.">Maks emiten/berita
+        <select id="maks-emiten">
+          <option value="">semua berita</option>
+          <option value="1">1 (tanpa rekap)</option>
+          <option value="2">2</option>
+          <option value="3">3</option>
+          <option value="5">5</option>
+        </select>
+      </label>
+      <button id="muat">Tampilkan</button>
+    </div>
+    <p class="galat" id="galat" hidden></p>
+    <p class="ket" id="cakupan-data"></p>
+    <p class="ket" id="petunjuk">Pilih emiten untuk melihat grafik dan beritanya, atau klik salah satu baris pada tabel di bawah.</p>
+  </section>
+
+  <section class="panel" id="panel-peringkat">
+    <div class="kepala-panel">
+      <h2>Ikhtisar seluruh emiten</h2>
+      <label class="sebaris">
+        <input type="checkbox" id="hanya-berberita" checked />
+        hanya yang ada beritanya
+      </label>
+    </div>
+    <div id="peringkat" class="tabel-bungkus"><p class="ket memuat">Memuat…</p></div>
+  </section>
+
+  <section class="panel" id="panel-grafik" hidden>
+    <h2 id="judul-emiten"></h2>
+    <div class="legenda">
+      <span><i class="garis sentimen"></i> Skor sentimen (−1 … +1)</span>
+      <span><i class="garis harga"></i> Harga penutupan</span>
+    </div>
+    <div id="grafik" class="grafik"></div>
+    <p class="ket" id="catatan-grafik"></p>
+    <div id="korelasi" class="korelasi"></div>
+  </section>
+
+  <section class="panel" id="panel-berita" hidden>
+    <div class="kepala-panel">
+      <h2>Berita terkait</h2>
+      <div class="saring">
+        <select id="saring-sentimen">
+          <option value="">Semua sentimen</option>
+          <option value="positif">Positif</option>
+          <option value="netral">Netral</option>
+          <option value="negatif">Negatif</option>
+        </select>
+        <select id="saring-status">
+          <option value="">Semua status</option>
+          <option value="terkonfirmasi_resmi">Terkonfirmasi resmi</option>
+          <option value="rumor_belum_terkonfirmasi">Rumor</option>
+          <option value="belum_diperiksa">Belum diperiksa</option>
+        </select>
+      </div>
+    </div>
+    <div id="berita"><p class="ket memuat">Memuat…</p></div>
+  </section>
+</main>
+
+<footer>
+  Sistem menyajikan hubungan korelatif, bukan prediksi harga. Keputusan investasi tetap ada pada pengguna.
+</footer>
+
+<script src="/statis/dasbor.js"></script>
+</body>
+</html>
