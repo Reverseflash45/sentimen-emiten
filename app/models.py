@@ -15,6 +15,7 @@ import enum
 from datetime import datetime, timezone
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     DateTime,
     Enum,
@@ -183,7 +184,7 @@ class HargaSaham(Base):
     tertinggi: Mapped[float | None] = mapped_column(Float, default=None)
     terendah: Mapped[float | None] = mapped_column(Float, default=None)
     penutupan: Mapped[float | None] = mapped_column(Float, default=None)
-    volume: Mapped[int | None] = mapped_column(Integer, default=None)
+    volume: Mapped[int | None] = mapped_column(BigInteger, default=None)  # volume harian bisa > 2^31
 
     emiten: Mapped[Emiten] = relationship(back_populates="harga")
 
