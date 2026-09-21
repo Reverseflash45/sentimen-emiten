@@ -1,19 +1,6 @@
-"""Titik masuk untuk Vercel.
+"""Titik masuk untuk Vercel (lihat [tool.vercel] di pyproject.toml).
 
-Vercel mencari objek `app` di berkas seperti `index.py` di akar proyek.
-Aplikasinya sendiri tetap di `app/main.py`; berkas ini hanya meneruskan,
-supaya Vercel tidak perlu menebak berkas mana yang harus dijalankan.
+Aplikasinya sendiri tetap di `app/main.py`; berkas ini hanya meneruskan.
 """
 
-try:
-    from app.main import app  # noqa: F401
-except Exception:  # SEMENTARA: tampilkan penyebab gagal start untuk diagnosis deploy
-    import traceback
-
-    _jejak = traceback.format_exc().encode()
-
-    async def app(scope, receive, send):  # type: ignore[no-redef]
-        if scope["type"] != "http":
-            return
-        await send({"type": "http.response.start", "status": 500, "headers": [(b"content-type", b"text/plain")]})
-        await send({"type": "http.response.body", "body": _jejak})
+from app.main import app  # noqa: F401

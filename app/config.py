@@ -4,7 +4,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    # env_ignore_empty: variabel yang ada tapi kosong (mis. dibuat tanpa nilai di
+    # dasbor hosting) dianggap tidak diisi, sehingga nilai bawaan yang dipakai.
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore", env_ignore_empty=True)
 
     database_url: str = "sqlite:///./sentimen.db"
     # WAJIB diganti sebelum dipakai di luar mesin sendiri — lihat .env.example.
