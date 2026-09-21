@@ -1,0 +1,11 @@
+# Yang tidak perlu ikut ke server Vercel: lingkungan lokal, basis data lokal,
+# uji, dan data penelitian mentah (API membaca semuanya dari basis data).
+.venv/
+.env
+*.db
+.pytest_cache/
+__pycache__/
+tests/
+data/log/
+data/harga/
+data/keterbukaan/
