@@ -1,0 +1,4 @@
+# Hanya konfigurasi Vercel. Dependensi tetap di requirements.txt.
+[tool.vercel]
+# Tanpa ini Vercel memilih app/main.py sendiri dan gagal mengimpor paket `app`.
+entrypoint = "index:app"
