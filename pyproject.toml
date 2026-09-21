@@ -1,4 +1,22 @@
-# Hanya konfigurasi Vercel. Dependensi tetap di requirements.txt.
+# Dipakai Vercel untuk memasang dependensi dan menentukan titik masuk.
+# Untuk pengembangan lokal, requirements.txt tetap berlaku — jaga keduanya sama.
+[project]
+name = "sentimen-emiten"
+version = "0.5.0"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.110,<1.0",
+    "uvicorn[standard]>=0.27,<1.0",
+    "SQLAlchemy>=2.0,<2.1",
+    "pydantic>=2.6,<3.0",
+    "pydantic-settings>=2.2,<3.0",
+    "httpx>=0.27,<1.0",
+    "beautifulsoup4>=4.12,<5.0",
+    "lxml>=5.0",
+    "python-dateutil>=2.9",
+    "psycopg[binary]>=3.1,<4.0",
+]
+
 [tool.vercel]
 # Tanpa ini Vercel memilih app/main.py sendiri dan gagal mengimpor paket `app`.
 entrypoint = "index:app"
