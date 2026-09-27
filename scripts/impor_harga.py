@@ -7,7 +7,7 @@ Jalankan:  python -m scripts.impor_harga data/harga 2026-01-01 2026-09-30
 from __future__ import annotations
 
 import sys
-from datetime import date
+from datetime import date, datetime, timezone
 
 from dateutil import parser as dateparser
 from sqlalchemy import select
@@ -15,6 +15,11 @@ from sqlalchemy import select
 from app.database import SessionLocal
 from app.harga.provider import PenyediaCsv
 from app.models import Emiten, HargaSaham
+
+
+def _utc(t: datetime) -> datetime:
+    """SQLite mengembalikan datetime tanpa zona, PostgreSQL dengan zona."""
+    return t.replace(tzinfo=timezone.utc) if t.tzinfo is None else t.astimezone(timezone.utc)
 
 
 def main() -> None:
@@ -34,14 +39,21 @@ def main() -> None:
             baris = penyedia.ambil(emiten.kode, mulai, sampai)
             if not baris:
                 continue
-            baru = 0
-            for b in baris:
-                sudah = session.scalar(
-                    select(HargaSaham).where(
-                        HargaSaham.emiten_id == emiten.id, HargaSaham.tanggal == b.tanggal
+            # Satu kueri per emiten, bukan satu per baris: ke basis data jarak jauh
+            # (Supabase) cara lama butuh belasan ribu perjalanan pulang-pergi.
+            sudah = {
+                _utc(t)
+                for t in session.scalars(
+                    select(HargaSaham.tanggal).where(
+                        HargaSaham.emiten_id == emiten.id,
+                        HargaSaham.tanggal >= baris[0].tanggal,
+                        HargaSaham.tanggal <= baris[-1].tanggal,
                     )
                 )
-                if sudah:
+            }
+            baru = 0
+            for b in baris:
+                if _utc(b.tanggal) in sudah:
                     continue
                 session.add(
                     HargaSaham(
