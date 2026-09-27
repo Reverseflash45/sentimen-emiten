@@ -1,0 +1,2 @@
+# Data penelitian: akhir baris selalu LF di repo, dari Windows maupun Linux
+data/**/*.csv text eol=lf

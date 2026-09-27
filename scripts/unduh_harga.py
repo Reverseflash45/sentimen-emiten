@@ -64,7 +64,10 @@ def unduh_satu(kode: str, mulai: date, sampai: date, folder: Path) -> tuple[int,
 
     berkas = folder / f"{kode.upper()}.csv"
     with berkas.open("w", encoding="utf-8", newline="") as f:
-        penulis = csv.writer(f)
+        # akhir baris LF eksplisit: bawaan modul csv adalah CRLF, yang membuat
+        # setiap unduhan di Linux (GitHub Actions) mengubah seluruh berkas
+        # walau angkanya sama
+        penulis = csv.writer(f, lineterminator="\n")
         penulis.writerow(KOLOM)
         for indeks, baris in bingkai.iterrows():
             penulis.writerow([
