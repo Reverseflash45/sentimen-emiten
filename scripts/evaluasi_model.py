@@ -13,6 +13,9 @@ Selisih macro-F1 IndoBERT vs leksikon dilengkapi selang kepercayaan 95% dari
 bootstrap berpasangan: dengan data uji yang kecil, selisih beberapa poin bisa
 saja kebetulan, dan selang ini menunjukkan seberapa yakin selisih itu nyata.
 
+Data uji hanya memakai label "buta" dari scripts.label_manual. Koreksi yang
+dibuat di dasbor ikut melatih model, tetapi tidak dipakai untuk menilainya.
+
 Laporan ditulis ke data/anotasi/laporan_evaluasi.md.
 """
 
@@ -88,7 +91,9 @@ def main() -> None:
 
     with SessionLocal() as s:
         data = muat_label_emas(s)
-    uji = [c for c in data if c.bagian == "uji"]
+    # Hanya label buta: koreksi di dasbor dibuat sambil melihat tebakan model,
+    # sehingga cenderung setuju dengannya dan akan menggelembungkan skor model.
+    uji = [c for c in data if c.bagian == "uji" and c.asal == "anotasi"]
     latih = [c for c in data if c.bagian == "latih"]
     if len(uji) < 30:
         raise SystemExit(f"Data uji baru {len(uji)} contoh — terlalu sedikit untuk angka yang bermakna. "
