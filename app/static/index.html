@@ -3,99 +3,119 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Analisis Sentimen Berita Emiten</title>
+<title>Sentimen Emiten — Analisis Sentimen Berita Saham LQ45</title>
+<meta name="description" content="Dasbor riset: sentimen berita 45 emiten LQ45 dari portal berita Indonesia, disandingkan dengan pergerakan harga saham." />
+<meta name="theme-color" content="#07080a" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2307080a'/%3E%3Cpath d='M12 42l12-12 9 8 19-19' fill='none' stroke='%235eead4' stroke-width='6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
 <link rel="stylesheet" href="/statis/gaya.css" />
 </head>
 <body>
 <header class="bar">
-  <div class="brand"><span class="dot"></span> Sentimen Emiten</div>
+  <a class="brand" href="/">
+    <span class="logo" aria-hidden="true">
+      <svg viewBox="0 0 24 24"><path d="M3 16l5-5 4 3.5L21 6" /></svg>
+    </span>
+    <span>Sentimen Emiten</span>
+    <span class="tanda">LQ45</span>
+  </a>
   <nav class="akun">
     <span id="siapa" class="redup"></span>
-    <button id="tombol-masuk" class="kecil">Masuk</button>
-    <a href="/docs" target="_blank" rel="noreferrer">Dokumentasi API</a>
+    <a class="tautan-api" href="/docs" target="_blank" rel="noreferrer">API</a>
+    <button id="tombol-masuk" class="tombol garis">Masuk</button>
   </nav>
 </header>
 
 <main>
-  <section class="panel" id="panel-masuk" hidden>
-    <h2>Masuk</h2>
+  <section class="panel masuk" id="panel-masuk" hidden>
+    <div class="kepala-panel">
+      <h2>Masuk</h2>
+      <p class="ket">Untuk watchlist dan koreksi label oleh analis.</p>
+    </div>
     <div class="kendali">
       <label>Email <input id="masuk-email" type="email" autocomplete="username" /></label>
-      <label>Kata sandi
-        <input id="masuk-sandi" type="password" autocomplete="current-password" />
-      </label>
-      <button id="kirim-masuk">Masuk</button>
+      <label>Kata sandi <input id="masuk-sandi" type="password" autocomplete="current-password" /></label>
+      <button id="kirim-masuk" class="tombol">Masuk</button>
     </div>
     <p class="galat" id="galat-masuk" hidden></p>
-    <p class="ket">Akun dibuat lewat <code>python -m scripts.buat_pengguna</code>.</p>
   </section>
 
-  <section class="kartu-baris" id="ringkasan"></section>
+  <section class="pembuka">
+    <p class="alis">Riset · Analisis sentimen berita</p>
+    <h1>Apa kata berita tentang <span class="sorot">saham LQ45</span>?</h1>
+    <p class="lead">
+      Berita dari portal-portal Indonesia dikumpulkan setiap hari, dipetakan ke emitennya,
+      dilabeli <b class="teks-pos">positif</b>, <b class="teks-net">netral</b>, atau
+      <b class="teks-neg">negatif</b>, lalu disandingkan dengan pergerakan harga sahamnya.
+    </p>
+    <div class="kartu-baris" id="ringkasan"></div>
+    <div class="teraktif" id="teraktif" hidden>
+      <span class="ket">Paling sering diberitakan:</span>
+      <div class="chip-baris" id="chip-teraktif"></div>
+    </div>
+  </section>
+
+  <section class="panel kontrol">
+    <div class="kendali utama">
+      <label class="lebar">Emiten
+        <select id="cari"><option value="">Pilih emiten…</option></select>
+      </label>
+      <div class="kolom">
+        <span class="label-kecil">Rentang</span>
+        <div class="segmen" id="pintasan" role="group" aria-label="Rentang waktu">
+          <button data-hari="7">7H</button>
+          <button data-hari="30">30H</button>
+          <button data-hari="90">90H</button>
+          <button data-ytd="1">YTD</button>
+          <button data-semua="1">Semua</button>
+        </div>
+      </div>
+    </div>
+
+    <details class="lanjutan">
+      <summary>Pengaturan analisis</summary>
+      <div class="kendali">
+        <label>Mulai <input type="date" id="mulai" /></label>
+        <label>Sampai <input type="date" id="sampai" /></label>
+        <label title="Menggeser sentimen beberapa hari ke depan sebelum dikorelasikan dengan harga.">Lag (hari)
+          <select id="lag"><option>0</option><option>1</option><option>2</option><option>3</option><option>5</option></select>
+        </label>
+        <label title="Membuang berita yang menyebut lebih banyak emiten dari ini. Dipakai untuk menguji apakah sinyalnya bertahan tanpa artikel rekap pasar.">Maks emiten per berita
+          <select id="maks-emiten">
+            <option value="">Semua berita</option>
+            <option value="1">1 (tanpa rekap)</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="5">5</option>
+          </select>
+        </label>
+        <button id="muat" class="tombol">Terapkan</button>
+      </div>
+    </details>
+
+    <p class="galat" id="galat" hidden></p>
+    <p class="ket" id="cakupan-data"></p>
+  </section>
 
   <section class="panel" id="panel-watchlist" hidden>
     <div class="kepala-panel">
       <h2>Watchlist saya</h2>
-      <button id="tambah-watchlist" class="kecil">+ tambah emiten terpilih</button>
+      <button id="tambah-watchlist" class="tombol garis kecil">+ Tambah emiten terpilih</button>
     </div>
     <div id="watchlist"></div>
   </section>
 
-  <section class="panel">
-    <div class="kendali">
-      <label>Emiten
-        <select id="cari">
-          <option value="">— pilih emiten —</option>
-        </select>
-      </label>
-      <label>Mulai <input type="date" id="mulai" /></label>
-      <label>Sampai <input type="date" id="sampai" /></label>
-      <label>Cepat
-        <span class="pintasan" id="pintasan">
-          <button class="kecil" data-hari="7">7h</button>
-          <button class="kecil" data-hari="30">30h</button>
-          <button class="kecil" data-hari="90">90h</button>
-          <button class="kecil" data-ytd="1">YTD</button>
-          <button class="kecil" data-semua="1">Semua</button>
-        </span>
-      </label>
-      <label>Lag (hari)
-        <select id="lag"><option>0</option><option>1</option><option>2</option><option>3</option><option>5</option></select>
-      </label>
-      <label title="Membuang berita yang menyebut lebih banyak emiten dari ini. Dipakai untuk menguji apakah sinyalnya bertahan tanpa artikel rekap pasar.">Maks emiten/berita
-        <select id="maks-emiten">
-          <option value="">semua berita</option>
-          <option value="1">1 (tanpa rekap)</option>
-          <option value="2">2</option>
-          <option value="3">3</option>
-          <option value="5">5</option>
-        </select>
-      </label>
-      <button id="muat">Tampilkan</button>
+  <section class="panel detail" id="panel-grafik" hidden>
+    <div class="kepala-detail">
+      <div>
+        <div class="kode-besar" id="kode-emiten"></div>
+        <h2 id="judul-emiten"></h2>
+      </div>
+      <button class="tutup" id="tutup-detail" aria-label="Tutup detail">✕</button>
     </div>
-    <p class="galat" id="galat" hidden></p>
-    <p class="ket" id="cakupan-data"></p>
-    <p class="ket" id="petunjuk">Pilih emiten untuk melihat grafik dan beritanya, atau klik salah satu baris pada tabel di bawah.</p>
-  </section>
-
-  <section class="panel" id="panel-peringkat">
-    <div class="kepala-panel">
-      <h2>Ikhtisar seluruh emiten</h2>
-      <label class="sebaris">
-        <input type="checkbox" id="hanya-berberita" checked />
-        hanya yang ada beritanya
-      </label>
-    </div>
-    <div id="peringkat" class="tabel-bungkus"><p class="ket memuat">Memuat…</p></div>
-  </section>
-
-  <section class="panel" id="panel-grafik" hidden>
-    <h2 id="judul-emiten"></h2>
-    <div class="legenda">
-      <span><i class="garis sentimen"></i> Skor sentimen (−1 … +1)</span>
-      <span><i class="garis harga"></i> Harga penutupan</span>
-    </div>
-    <div id="grafik" class="grafik"></div>
-    <p class="ket" id="catatan-grafik"></p>
+    <div class="metrik" id="metrik"></div>
+    <div class="grafik" id="grafik"></div>
+    <p class="ket catatan" id="catatan-grafik" hidden></p>
+    <h3 class="subjudul">Korelasi sentimen dan harga</h3>
     <div id="korelasi" class="korelasi"></div>
   </section>
 
@@ -103,13 +123,13 @@
     <div class="kepala-panel">
       <h2>Berita terkait</h2>
       <div class="saring">
-        <select id="saring-sentimen">
+        <select id="saring-sentimen" aria-label="Saring sentimen">
           <option value="">Semua sentimen</option>
           <option value="positif">Positif</option>
           <option value="netral">Netral</option>
           <option value="negatif">Negatif</option>
         </select>
-        <select id="saring-status">
+        <select id="saring-status" aria-label="Saring status verifikasi">
           <option value="">Semua status</option>
           <option value="terkonfirmasi_resmi">Terkonfirmasi resmi</option>
           <option value="rumor_belum_terkonfirmasi">Rumor</option>
@@ -119,11 +139,31 @@
     </div>
     <div id="berita"><p class="ket memuat">Memuat…</p></div>
   </section>
+
+  <section class="panel" id="panel-peringkat">
+    <div class="kepala-panel">
+      <div>
+        <h2>Peringkat sentimen</h2>
+        <p class="ket">Klik baris untuk melihat grafik dan beritanya. Klik judul kolom untuk mengurutkan.</p>
+      </div>
+      <div class="saring">
+        <input type="search" id="cari-tabel" placeholder="Cari kode atau nama…" aria-label="Cari emiten" />
+        <label class="sebaris">
+          <input type="checkbox" id="hanya-berberita" checked />
+          Hanya yang ada beritanya
+        </label>
+      </div>
+    </div>
+    <div id="peringkat" class="tabel-bungkus"><p class="ket memuat">Memuat…</p></div>
+  </section>
 </main>
 
 <footer>
-  Sistem menyajikan hubungan korelatif, bukan prediksi harga. Keputusan investasi tetap ada pada pengguna.
+  <p>Sistem menyajikan hubungan korelatif, bukan prediksi harga. Keputusan investasi tetap ada pada pengguna.</p>
+  <p class="redup">Dibuat oleh <a href="https://www.raffstw.my.id" target="_blank" rel="noreferrer">Rafi Fernandito Setiawan</a> · FastAPI + PostgreSQL</p>
 </footer>
+
+<div class="tooltip" id="tooltip" role="status" hidden></div>
 
 <script src="/statis/dasbor.js"></script>
 <!-- Vercel Web Analytics: skrip dilayani Vercel sendiri, hanya aktif di deployment -->
