@@ -17,6 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.klasifikasi.basis import Pengklasifikasi
+from app.klasifikasi.dataset import teks_target, teks_utama
 from app.models import AsalLabel, Berita, BeritaEmiten, LabelSentimen
 
 
@@ -34,7 +35,7 @@ class HasilKlasifikasi:
 
 
 def teks_untuk_model(berita: Berita) -> str:
-    return f"{berita.judul}. {berita.ringkasan or ''}".strip()
+    return teks_utama(berita.judul, berita.ringkasan)
 
 
 def label_sudah_ada(session: Session, berita_id: int, emiten_id: int, versi: str) -> bool:
@@ -79,10 +80,16 @@ def klasifikasi_berita_baru(
             berita.sudah_diklasifikasi = True
             continue
 
-        prediksi = pengklasifikasi.prediksi(teks_untuk_model(berita))
-        for k in kaitan:
-            if label_sudah_ada(session, berita.id, k.emiten_id, pengklasifikasi.versi):
-                continue
+        belum = [k for k in kaitan if not label_sudah_ada(session, berita.id, k.emiten_id, pengklasifikasi.versi)]
+        teks = teks_untuk_model(berita)
+        if pengklasifikasi.per_emiten:
+            # satu prediksi per emiten: nada berita bisa berbeda antar-emiten
+            semua_prediksi = pengklasifikasi.prediksi_emiten_banyak(
+                [(teks, teks_target(k.emiten.kode, k.emiten.nama, k.kutipan)) for k in belum]
+            )
+        else:
+            semua_prediksi = [pengklasifikasi.prediksi(teks)] * len(belum) if belum else []
+        for k, prediksi in zip(belum, semua_prediksi):
             session.add(
                 LabelSentimen(
                     berita_id=berita.id,

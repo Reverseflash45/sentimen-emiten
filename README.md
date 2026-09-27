@@ -439,10 +439,10 @@ sama.
 
 ## Yang belum dikerjakan
 
-- IndoBERT hasil fine-tuning — baseline leksikon masih dipakai sementara
+- Melatih IndoBERT — infrastrukturnya sudah ada (lihat "IndoBERT" di bawah),
+  menunggu label manual yang cukup
 - Notifikasi ke pengguna saat sentimen emiten watchlist bergerak tajam
 - Verifikasi daftar LQ45 terhadap pengumuman resmi BEI terbaru
-- Penjadwalan otomatis (saat ini tiap siklus dijalankan manual)
 
 ## Batasan yang disengaja
 
@@ -481,6 +481,19 @@ akhir yang bebas bias. Pengukuran untuk laporan sebaiknya memakai berita yang
 dikumpulkan setelah perbaikan.
 
 ## Menjalankan otomatis tiap hari
+
+Cara utama sekarang adalah **GitHub Actions** (`.github/workflows/siklus-harian.yml`):
+berita dikumpulkan dua kali sehari (07.30 dan 19.30 WIB) dan harga penutupan
+diunduh tiap hari bursa pukul 18.00 WIB, langsung ke basis data yang dipakai
+situs. CSV harga yang baru ikut disimpan kembali ke repo sebagai data
+penelitian. Rahasia `DATABASE_URL` dan `USER_AGENT` diisi di
+*Settings → Secrets and variables → Actions*; jalankan manual lewat tab
+*Actions → Siklus harian → Run workflow*.
+
+Keuntungannya dibanding penjadwal di laptop: tetap berjalan walau laptop mati
+— penting karena berita yang terlewat hilang permanen (lihat di bawah).
+
+Alternatif lokal dengan Task Scheduler Windows:
 
 ```bat
 REM sekali, dari PowerShell yang dijalankan sebagai Administrator:
@@ -525,6 +538,43 @@ sementara data harga bisa diunduh sembilan bulan ke belakang dalam satu menit.
 Ketimpangan itu yang menentukan jadwal penelitian: kalau butuh 30 hari bursa
 untuk analisis, itu berarti sekitar enam minggu kalender sejak pengumpulan
 dimulai. Setiap hari yang terlewat adalah lubang permanen.
+
+## IndoBERT
+
+Seluruh label yang ada dibuat leksikon. Melatih model dengan label itu hanya
+mengajari model meniru leksikon, sehingga perbandingan keduanya tidak sah.
+Karena itu alurnya dimulai dari label manual (label emas):
+
+```bash
+python -m scripts.label_manual          # 1. anotasi: satu tombol per berita-emiten
+pip install torch --index-url https://download.pytorch.org/whl/cu121
+pip install -r requirements-ml.txt      # 2. pustaka pelatihan (GPU NVIDIA)
+python -m scripts.latih_indobert        # 3. fine-tuning indobenchmark/indobert-base-p1
+python -m scripts.evaluasi_model        # 4. bandingkan dengan leksikon pada data uji
+python -m scripts.klasifikasi --model indobert --ulangi   # 5. labeli seluruh berita
+```
+
+Keputusan yang perlu disebut di laporan:
+
+- **Label per emiten.** Masukan model berupa pasangan kalimat
+  `[judul + ringkasan] [SEP] [kode (nama). kutipan]`, sehingga satu berita
+  bisa positif bagi satu emiten dan negatif bagi emiten lain — hal yang tidak
+  bisa dilakukan leksikon.
+- **Pembagian data per berita**, bukan per pasangan, secara deterministik
+  (hash id berita; 70/15/15). Artikel yang menyebut beberapa emiten tidak
+  pernah muncul sekaligus di data latih dan data uji.
+- **Data uji tidak disentuh saat pelatihan.** Pemilihan epoch terbaik memakai
+  data validasi; data uji hanya dibaca `evaluasi_model`.
+- **Anotator tidak melihat prediksi leksikon** saat melabeli, supaya label
+  emas tidak bias ke arah model yang sedang diuji.
+- Evaluasi melaporkan akurasi, macro-F1, F1 per kelas, matriks kebingungan,
+  pembanding tebakan kelas mayoritas, dan selang kepercayaan 95% (bootstrap
+  berpasangan) untuk selisih macro-F1 IndoBERT − leksikon.
+
+Label manual disimpan sebagai `asal=ANALIS, versi_model="anotasi"`; karena
+label analis selalu diutamakan, anotasi sekaligus memperbaiki angka di dasbor.
+Pasangan yang ternyata salah petakan dicatat di `data/anotasi/tidak_relevan.csv`
+— bahan untuk mengukur dan memperbaiki presisi pemetaan emiten.
 
 ## Temuan yang harus masuk laporan: dominasi artikel rekap
 

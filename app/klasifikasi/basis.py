@@ -28,6 +28,10 @@ class Pengklasifikasi(ABC):
     #: dicatat pada setiap label, mis. "leksikon-v1" atau "indobert-v1"
     versi: str = "-"
 
+    #: True bila model menilai sentimen TERHADAP emiten tertentu (memakai
+    #: `prediksi_emiten`), bukan nada artikel secara umum.
+    per_emiten: bool = False
+
     @abstractmethod
     def prediksi(self, teks: str) -> Prediksi:
         """Mengklasifikasi satu teks."""
@@ -36,3 +40,12 @@ class Pengklasifikasi(ABC):
         """Versi batch. Model berbasis neural sebaiknya menimpa metode ini
         supaya bisa memproses satu batch sekaligus."""
         return [self.prediksi(t) for t in daftar]
+
+    def prediksi_emiten(self, teks: str, target: str) -> Prediksi:
+        """Sentimen `teks` terhadap `target` (lihat `dataset.teks_target`).
+        Bawaannya mengabaikan target — cocok untuk model yang hanya menilai
+        nada artikel, seperti leksikon."""
+        return self.prediksi(teks)
+
+    def prediksi_emiten_banyak(self, pasangan: list[tuple[str, str]]) -> list[Prediksi]:
+        return [self.prediksi_emiten(t, s) for t, s in pasangan]

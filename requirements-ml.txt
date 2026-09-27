@@ -1,0 +1,11 @@
+# Hanya untuk melatih / menjalankan IndoBERT di mesin sendiri.
+# Tidak dipasang di server web (Vercel) — API tidak memerlukannya.
+#
+# Untuk GPU NVIDIA, pasang torch versi CUDA lebih dulu:
+#   pip install torch --index-url https://download.pytorch.org/whl/cu121
+# lalu:
+#   pip install -r requirements-ml.txt
+torch>=2.2
+transformers>=4.44,<5
+scikit-learn>=1.3
+numpy

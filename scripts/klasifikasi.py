@@ -3,6 +3,10 @@
     python -m scripts.klasifikasi
     python -m scripts.klasifikasi --ulangi       # label ulang seluruh berita
     python -m scripts.klasifikasi --batas 100
+    python -m scripts.klasifikasi --model indobert --ulangi   # labeli dengan IndoBERT
+
+Label versi lama tidak dihapus: label IndoBERT disimpan berdampingan dengan
+label leksikon, dan dasbor memakai label model yang terbaru.
 """
 
 from __future__ import annotations
@@ -18,9 +22,14 @@ def main() -> None:
     p = argparse.ArgumentParser(description="Pelabelan sentimen berita")
     p.add_argument("--batas", type=int, default=None, help="jumlah berita maksimum")
     p.add_argument("--ulangi", action="store_true", help="proses ulang berita yang sudah dilabeli")
+    p.add_argument("--model", choices=["leksikon", "indobert"], default="leksikon")
     argumen = p.parse_args()
 
-    model = PengklasifikasiLeksikon()
+    if argumen.model == "indobert":
+        from app.klasifikasi.indobert import PengklasifikasiIndoBERT
+        model = PengklasifikasiIndoBERT()
+    else:
+        model = PengklasifikasiLeksikon()
     with SessionLocal() as session:
         hasil = klasifikasi_berita_baru(session, model, batas=argumen.batas, ulangi=argumen.ulangi)
 

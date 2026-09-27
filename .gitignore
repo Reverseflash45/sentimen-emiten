@@ -13,3 +13,6 @@ data/log/
 
 # Berkas harga CSV SENGAJA TIDAK diabaikan: itu data penelitian yang harus
 # bisa diperiksa ulang orang lain. Lihat bagian "Catatan data" pada README.
+
+# model hasil fine-tuning — besar (±500 MB); bagikan lewat Hugging Face Hub, bukan git
+model/
