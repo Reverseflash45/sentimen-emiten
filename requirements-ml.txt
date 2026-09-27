@@ -2,10 +2,13 @@
 # Tidak dipasang di server web (Vercel) — API tidak memerlukannya.
 #
 # Untuk GPU NVIDIA, pasang torch versi CUDA lebih dulu:
-#   pip install torch --index-url https://download.pytorch.org/whl/cu121
+#   pip install "torch>=2.6" --index-url https://download.pytorch.org/whl/cu124
 # lalu:
 #   pip install -r requirements-ml.txt
-torch>=2.2
+#
+# torch minimal 2.6: bobot indobert-base-p1 berformat .bin, dan transformers
+# menolak memuat format itu dengan torch lama (celah keamanan CVE-2025-32434).
+torch>=2.6
 transformers>=4.44,<5
 scikit-learn>=1.3
 numpy

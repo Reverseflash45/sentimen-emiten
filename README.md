@@ -547,7 +547,7 @@ Karena itu alurnya dimulai dari label manual (label emas):
 
 ```bash
 python -m scripts.label_manual          # 1. anotasi: satu tombol per berita-emiten
-pip install torch --index-url https://download.pytorch.org/whl/cu121
+pip install "torch>=2.6" --index-url https://download.pytorch.org/whl/cu124
 pip install -r requirements-ml.txt      # 2. pustaka pelatihan (GPU NVIDIA)
 python -m scripts.latih_indobert        # 3. fine-tuning indobenchmark/indobert-base-p1
 python -m scripts.evaluasi_model        # 4. bandingkan dengan leksikon pada data uji
