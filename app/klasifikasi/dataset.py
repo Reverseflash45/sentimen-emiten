@@ -59,6 +59,9 @@ class Contoh:
     target: str
     sentimen: Sentimen
     bagian: str
+    #: "anotasi" = dilabeli buta lewat scripts.label_manual; "koreksi" = dibuat
+    #: di dasbor sambil melihat label model (bisa terpengaruh / anchoring)
+    asal: str = "anotasi"
 
 
 def muat_label_emas(session: Session) -> list[Contoh]:
@@ -85,5 +88,6 @@ def muat_label_emas(session: Session) -> list[Contoh]:
             target=teks_target(emiten.kode, emiten.nama, kutipan),
             sentimen=label.sentimen,
             bagian=bagian_data(berita.id),
+            asal="anotasi" if label.versi_model == VERSI_ANOTASI else "koreksi",
         )
     return sorted(terbaru.values(), key=lambda c: (c.berita_id, c.kode))

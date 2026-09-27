@@ -501,3 +501,41 @@ def test_rentang_sangat_panjang_tetap_ditolak(klien):
         params={"mulai": "2010-01-01", "sampai": "2026-09-30"},
     )
     assert r.status_code == 400
+
+
+# ------------------------------------------------ ruang kerja analis
+
+
+def test_ruang_analis_tertutup_bagi_tamu_dan_pengguna_biasa(klien, biasa):
+    assert klien.get("/api/analis/antrean").status_code == 401
+    assert klien.get("/api/analis/antrean", headers=biasa).status_code == 403
+    assert klien.get("/api/analis/statistik", headers=biasa).status_code == 403
+
+
+def test_antrean_berisi_label_model_yang_belum_ditinjau(klien, analis):
+    d = klien.get("/api/analis/antrean", headers=analis).json()
+    assert d["total"] == 10
+    assert d["item"][0]["kode"] == "BBCA"
+    assert d["item"][0]["label_model"]["asal"] == "model"
+
+    id_berita = d["item"][0]["berita_id"]
+    klien.post(f"/api/berita/{id_berita}/koreksi",
+               json={"kode_emiten": "BBCA", "sentimen": "netral"}, headers=analis)
+    lagi = klien.get("/api/analis/antrean", headers=analis).json()
+    assert lagi["total"] == 9
+    assert id_berita not in [i["berita_id"] for i in lagi["item"]]
+
+
+def test_statistik_menghitung_setuju_dan_koreksi(klien, analis):
+    item = klien.get("/api/analis/antrean", params={"limit": 2}, headers=analis).json()["item"]
+    setuju, koreksi = item
+    klien.post(f"/api/berita/{setuju['berita_id']}/koreksi",
+               json={"kode_emiten": "BBCA", "sentimen": setuju["label_model"]["sentimen"]}, headers=analis)
+    klien.post(f"/api/berita/{koreksi['berita_id']}/koreksi",
+               json={"kode_emiten": "BBCA", "sentimen": "netral"}, headers=analis)
+
+    s = klien.get("/api/analis/statistik", headers=analis).json()
+    assert s["pasangan_berlabel_model"] == 10
+    assert (s["sudah_ditinjau"], s["tersisa"], s["setuju"], s["dikoreksi"]) == (2, 8, 1, 1)
+    assert s["matriks"][koreksi["label_model"]["sentimen"]]["netral"] == 1
+    assert s["verifikasi"]["belum_diperiksa"] == 10

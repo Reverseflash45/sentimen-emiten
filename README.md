@@ -181,9 +181,23 @@ tests/                 205 uji, semuanya tanpa jaringan
 | GET | `/api/watchlist` | watchlist pengguna yang sedang masuk |
 | POST | `/api/watchlist` | tambah emiten ke watchlist |
 | DELETE | `/api/watchlist/{kode}` | hapus emiten dari watchlist |
+| GET | `/api/analis/antrean` | label model yang belum ditinjau, paling ragu dulu (`?kode=`, `?urut=`) |
+| GET | `/api/analis/statistik` | kesepakatan model–analis dan matriksnya, status verifikasi |
 
-Endpoint `POST /api/berita/{id}/koreksi` dan `/verifikasi` menuntut peran
-**analis**; sisanya bisa dibaca tanpa masuk.
+Endpoint `POST /api/berita/{id}/koreksi`, `/verifikasi`, dan `/api/analis/*`
+menuntut peran **analis**; watchlist menuntut akun apa pun; sisanya bisa
+dibaca tanpa masuk.
+
+Dasbor menyesuaikan tampilannya dengan peran yang masuk:
+
+- **Tamu** — ringkasan, pencarian emiten, grafik, peringkat, berita.
+- **Pengguna** — ditambah watchlist berbentuk kartu dan tombol ☆ Pantau di
+  panel detail emiten.
+- **Analis** — ditambah ruang kerja: antrean tinjauan label (setujui atau
+  koreksi dengan satu klik), antrean verifikasi berita, serta statistik
+  kesepakatan model–analis. Karena analis melihat label model saat meninjau,
+  koreksi ini dipakai untuk melatih ulang model tetapi **tidak** untuk
+  mengujinya (lihat bagian IndoBERT).
 
 ## Akun dan peran
 

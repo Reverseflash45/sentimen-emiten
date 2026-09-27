@@ -209,3 +209,38 @@ class RentangData(BaseModel):
     berita_sampai: date | None = None
     harga_mulai: date | None = None
     harga_sampai: date | None = None
+
+
+# ------------------------------------------------ ruang kerja analis
+
+
+class ItemAntrean(BaseModel):
+    """Satu pasangan berita-emiten berlabel model yang belum ditinjau analis."""
+
+    berita_id: int
+    judul: str
+    ringkasan: str | None = None
+    url: str
+    sumber: str
+    terbit_pada: datetime | None = None
+    status_verifikasi: StatusVerifikasi
+    kode: str
+    nama: str
+    kutipan: str | None = None
+    label_model: LabelRingkas
+
+
+class Antrean(BaseModel):
+    total: int
+    item: list[ItemAntrean] = Field(default_factory=list)
+
+
+class StatistikAnalis(BaseModel):
+    pasangan_berlabel_model: int
+    sudah_ditinjau: int
+    tersisa: int
+    setuju: int
+    dikoreksi: int
+    #: matriks[label_model][label_analis] = jumlah
+    matriks: dict[str, dict[str, int]] = Field(default_factory=dict)
+    verifikasi: dict[str, int] = Field(default_factory=dict)

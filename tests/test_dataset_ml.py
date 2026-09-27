@@ -77,6 +77,7 @@ def test_label_emas_hanya_dari_manusia_dan_yang_terbaru(db):
     assert data[0].sentimen == Sentimen.POSITIF
     assert data[0].target.startswith("BBCA (Bank Central Asia Tbk).")
     assert data[0].bagian == bagian_data(b2.id)
+    assert data[0].asal == "koreksi"  # label terbaru berasal dari dasbor, bukan anotasi buta
 
 
 class ModelPerEmiten(Pengklasifikasi):
