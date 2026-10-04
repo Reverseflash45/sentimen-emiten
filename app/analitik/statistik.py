@@ -41,6 +41,10 @@ def pearson(x: list[float], y: list[float]) -> HasilKorelasi:
     n = len(x)
     if n < 3:
         raise ValueError("butuh minimal 3 pasang data")
+    if not all(math.isfinite(v) for v in (*x, *y)):
+        # NaN tidak membuat galat di sini — ia diam-diam menghasilkan
+        # koefisien NaN, yang lalu terbaca "sangat kuat" (abs(NaN) < 0.2 salah)
+        raise ValueError("deret memuat NaN atau tak hingga")
 
     mx, my = _rerata(x), _rerata(y)
     pembilang = sum((a - mx) * (b - my) for a, b in zip(x, y))

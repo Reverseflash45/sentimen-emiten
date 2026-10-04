@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import math
 import sys
 from datetime import date, datetime
 from pathlib import Path
@@ -82,17 +83,26 @@ def unduh_satu(kode: str, mulai: date, sampai: date, folder: Path) -> tuple[int,
 
 
 def _angka(nilai) -> str:
+    """Sel kosong untuk nilai yang tidak ada.
+
+    yfinance mengisi hari yang belum selesai diproses dengan NaN, bukan
+    mengosongkannya. Tanpa pemeriksaan ini NaN tertulis sebagai teks "nan",
+    lalu terimpor ke basis data sebagai angka dan merusak setiap perhitungan
+    yang menyentuhnya.
+    """
     try:
-        return "" if nilai is None else f"{float(nilai):.4f}"
+        angka = float(nilai)
     except (TypeError, ValueError):
         return ""
+    return f"{angka:.4f}" if math.isfinite(angka) else ""
 
 
 def _bulat(nilai) -> str:
     try:
-        return "" if nilai is None else str(int(float(nilai)))
+        angka = float(nilai)
     except (TypeError, ValueError):
         return ""
+    return str(int(angka)) if math.isfinite(angka) else ""
 
 
 def main() -> None:

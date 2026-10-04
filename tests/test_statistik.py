@@ -71,3 +71,9 @@ def test_geser_maju_dan_mundur():
 def test_kekuatan_dideskripsikan():
     assert pearson([1, 2, 3, 4], [2, 4, 6, 8]).kekuatan() == "sangat kuat"
     assert pearson([5, 5, 5, 5], [1, 2, 3, 4]).kekuatan() == "sangat lemah"
+
+
+def test_pearson_menolak_nan_bukan_diam_diam_menghasilkan_nan():
+    # NaN yang lolos menghasilkan koefisien NaN berlabel "sangat kuat"
+    with pytest.raises(ValueError):
+        pearson([0.1, 0.2, 0.3, 0.4], [0.01, float("nan"), 0.02, 0.03])

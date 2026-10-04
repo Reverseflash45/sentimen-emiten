@@ -512,6 +512,10 @@ function tampilkanMetrik(sentimen, harga, detail) {
   );
 }
 
+// koefisien bisa null bila API mengirim NaN; jangan sampai satu angka
+// kosong menghentikan render korelasi dan daftar berita sesudahnya
+const ada = (kor) => kor != null && Number.isFinite(kor.koefisien);
+
 function tampilkanKorelasi(k) {
   const wadah = $("#korelasi");
   wadah.innerHTML = "";
@@ -519,9 +523,9 @@ function tampilkanKorelasi(k) {
   const kotak = (judul, kor) =>
     el("div", { class: "kotak" }, [
       el("div", { class: "ket" }, judul),
-      el("div", { class: `nilai ${kor ? kelasArah(kor.koefisien) : ""}` },
-         kor ? (kor.koefisien > 0 ? "+" : "") + kor.koefisien.toFixed(3) : "—"),
-      el("div", { class: "ket" }, kor ? `${kor.kekuatan} · n=${kor.n}` : "belum cukup data"),
+      el("div", { class: `nilai ${ada(kor) ? kelasArah(kor.koefisien) : ""}` },
+         ada(kor) ? (kor.koefisien > 0 ? "+" : "") + kor.koefisien.toFixed(3) : "—"),
+      el("div", { class: "ket" }, ada(kor) ? `${kor.kekuatan} · n=${kor.n}` : "belum cukup data"),
     ]);
   wadah.append(kotak("Pearson (linear)", k.pearson));
   wadah.append(kotak("Spearman (monoton)", k.spearman));
@@ -1136,7 +1140,14 @@ async function muatEmiten({ gulir = false } = {}) {
       catatan.hidden = true;
     }
     tampilkanKorelasi(kor);
-    if (state.baris.length) gambarPeringkat();
+  } catch (e) {
+    galat(e.message);
+  }
+  // berita dimuat terpisah: kegagalan grafik atau korelasi tidak boleh
+  // ikut mengosongkan daftar berita emiten ini
+  if (state.kode !== kode) return;
+  if (state.baris.length) gambarPeringkat();
+  try {
     await muatBerita();
   } catch (e) {
     galat(e.message);

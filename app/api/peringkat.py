@@ -13,6 +13,7 @@ diberitakan negatif terus-menerus.
 
 from __future__ import annotations
 
+import math
 from datetime import date
 
 from fastapi import APIRouter, Depends, Query
@@ -36,7 +37,7 @@ def _harga(session: Session, emiten_id: int, mulai: date, sampai: date):
             .where(HargaSaham.emiten_id == emiten_id)
             .order_by(HargaSaham.tanggal)
         )
-        if h.penutupan is not None and mulai <= h.tanggal.date() <= sampai
+        if h.penutupan is not None and math.isfinite(h.penutupan) and mulai <= h.tanggal.date() <= sampai
     ]
     if not baris:
         return None, None

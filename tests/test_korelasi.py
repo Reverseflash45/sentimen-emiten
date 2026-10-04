@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from datetime import date, datetime, timedelta, timezone
 
 import pytest
@@ -99,3 +100,20 @@ def test_emiten_tanpa_data_aman(db):
     hasil = sandingkan(db, "BBCA", date(2026, 9, 1), date(2026, 9, 30))
     assert hasil.titik == []
     assert hasil.pearson is None
+
+
+def test_harga_nan_dilewati_bukan_merusak_korelasi(db):
+    # yfinance mengisi hari yang belum selesai diproses dengan NaN; baris itu
+    # sempat tersimpan di basis data dan membuat Pearson ikut NaN
+    isi(db, [
+        (Sentimen.NEGATIF, 100.0),
+        (Sentimen.NEGATIF, 98.0),
+        (Sentimen.NETRAL, float("nan")),
+        (Sentimen.POSITIF, 103.0),
+        (Sentimen.POSITIF, 108.0),
+        (Sentimen.POSITIF, 114.0),
+    ])
+    hasil = sandingkan(db, "BBCA", date(2026, 9, 1), date(2026, 9, 30))
+    assert len(hasil.titik) == 5
+    assert math.isfinite(hasil.pearson.koefisien)
+    assert math.isfinite(hasil.spearman.koefisien)

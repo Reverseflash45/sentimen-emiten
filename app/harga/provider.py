@@ -12,6 +12,7 @@ Dua penyedia disediakan dengan sengaja:
 from __future__ import annotations
 
 import csv
+import math
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
@@ -45,9 +46,11 @@ def _angka(nilai: str | None) -> float | None:
     if teks in ("", "-", "N/A", "null", "None"):
         return None
     try:
-        return float(teks)
+        angka = float(teks)
     except ValueError:
         return None
+    # float() menerima "nan" dan "inf"; keduanya bukan harga
+    return angka if math.isfinite(angka) else None
 
 
 def _bulat(nilai: str | None) -> int | None:

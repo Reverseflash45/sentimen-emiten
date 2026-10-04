@@ -67,3 +67,24 @@ def test_csv_tanpa_kolom_tanggal_ditolak_dengan_jelas(folder):
 def test_semua_tanggal_dikembalikan_dalam_utc(folder):
     baris = PenyediaCsv(folder).ambil("BBCA", date(2026, 1, 1), date(2026, 12, 31))
     assert all(b.tanggal.tzinfo is not None for b in baris)
+
+
+def test_nan_di_csv_dibaca_sebagai_kosong(tmp_path):
+    (tmp_path / "BBCA.csv").write_text(
+        "tanggal,pembukaan,tertinggi,terendah,penutupan,volume\n"
+        "2026-09-28,nan,nan,nan,nan,112107600\n"
+        "2026-09-29,6150,6225,6125,inf,149783400\n",
+        encoding="utf-8",
+    )
+    baris = PenyediaCsv(tmp_path).ambil("BBCA", date(2026, 9, 1), date(2026, 9, 30))
+    assert [b.penutupan for b in baris] == [None, None]
+    assert baris[0].volume == 112107600
+
+
+def test_unduhan_menulis_nan_sebagai_sel_kosong():
+    from scripts.unduh_harga import _angka, _bulat
+
+    assert _angka(float("nan")) == ""
+    assert _bulat(float("nan")) == ""
+    assert _angka(6225.0) == "6225.0000"
+    assert _bulat(1.2e8) == "120000000"

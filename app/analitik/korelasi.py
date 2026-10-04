@@ -7,6 +7,8 @@ ramalan harga.
 
 from __future__ import annotations
 
+import math
+
 from dataclasses import dataclass
 from datetime import date
 
@@ -45,7 +47,7 @@ def ambil_harga(session: Session, kode: str, mulai: date, sampai: date) -> dict[
     for h in session.scalars(
         select(HargaSaham).where(HargaSaham.emiten_id == emiten.id).order_by(HargaSaham.tanggal)
     ):
-        if h.penutupan is None:
+        if h.penutupan is None or not math.isfinite(h.penutupan):
             continue
         tgl = h.tanggal.date()
         if mulai <= tgl <= sampai:
