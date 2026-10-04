@@ -5,7 +5,7 @@
     python -m scripts.latih_klasik --jenis svm
     python -m scripts.latih_klasik --perak auto   # + label LLM untuk data latih
 
-Data dan pembagiannya sama dengan scripts/latih_indobert.py: label emas
+Data dan pembagiannya sama dengan scripts/latih_indobert.py: label manusia
 buatan manusia, per berita, 70/15/15. Hiperparameter (alpha untuk NB, C untuk
 SVM) dipilih pada data VALIDASI; data uji hanya dibaca scripts/evaluasi_model.py.
 

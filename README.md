@@ -605,27 +605,55 @@ Ketimpangan itu yang menentukan jadwal penelitian: kalau butuh 30 hari bursa
 untuk analisis, itu berarti sekitar enam minggu kalender sejak pengumpulan
 dimulai. Setiap hari yang terlewat adalah lubang permanen.
 
-## IndoBERT
+## IndoBERT dan metode pembanding
 
-Seluruh label yang ada dibuat leksikon. Melatih model dengan label itu hanya
+Seluruh label lama dibuat leksikon. Melatih model dengan label itu hanya
 mengajari model meniru leksikon, sehingga perbandingan keduanya tidak sah.
-Karena itu alurnya dimulai dari label manual (label emas):
+Karena itu sumber label dipisah tegas menurut perannya:
+
+| Bagian data (per berita, 70/15/15) | Sumber label | Dipakai untuk |
+| --- | --- | --- |
+| Latih & validasi | label manusia bila ada; sisanya **label perak** LLM | melatih NB, SVM, IndoBERT; memilih hiperparameter/epoch |
+| Uji | **hanya** label manusia buta (`label_manual`) | evaluasi akhir semua metode |
+
+Label perak dibuat LLM lokal lewat Ollama (gratis), membaca pedoman anotasi
+yang sama persis dengan anotator manusia (`app/klasifikasi/pedoman.py`). LLM
+yang sama sekaligus menjadi **metode pembanding zero-shot**. Label LLM tidak
+pernah masuk data uji dan bukan label produksi dasbor — dasbor tetap memakai
+satu sumber model yang konsisten sepanjang waktu.
 
 ```bash
-python -m scripts.label_manual          # 1. anotasi: satu tombol per berita-emiten
+# sekali: pasang Ollama (https://ollama.com), lalu
+ollama pull qwen2.5:7b
 pip install "torch>=2.6" --index-url https://download.pytorch.org/whl/cu124
-pip install -r requirements-ml.txt      # 2. pustaka pelatihan (GPU NVIDIA)
-python -m scripts.latih_klasik          # 3. pembanding TF-IDF + Naive Bayes & SVM (tanpa GPU)
-python -m scripts.latih_indobert        # 4. fine-tuning indobenchmark/indobert-base-p1
-python -m scripts.evaluasi_model        # 5. bandingkan semuanya pada data uji
-python -m scripts.klasifikasi --model indobert --ulangi   # 6. labeli seluruh berita
+pip install -r requirements-ml.txt
+
+python -m scripts.label_llm                         # 1. label perak + prediksi LLM (±10 menit)
+python -m scripts.label_manual --hanya-uji --target 200   # 2. data uji: WAJIB manusia
+python -m scripts.latih_klasik --perak auto         # 3. TF-IDF + Naive Bayes & SVM (tanpa GPU)
+python -m scripts.latih_indobert --perak auto       # 4. fine-tuning indobenchmark/indobert-base-p1
+python -m scripts.latih_indobert --perak auto --tanpa-target   # 5. ablasi tanpa segmen emiten
+python -m scripts.evaluasi_model                    # 6. bandingkan semuanya pada data uji manusia
+python -m scripts.klasifikasi --model indobert --ulangi   # 7. labeli seluruh berita
 ```
 
-Tabel hasil `evaluasi_model` menyusun empat tingkat pendekatan berurutan:
+Kenapa data uji tidak boleh dari LLM: model yang dilatih dari label LLM lalu
+diuji dengan label LLM hanya mengukur seberapa mirip ia dengan LLM, bukan
+seberapa benar. Data uji manusia juga membuat ketidaksepakatan LLM terlihat —
+termasuk kecenderungannya, misalnya terlalu sering memilih netral.
+
+Kenapa label perak tetap sah untuk data latih: pemakaian LLM sebagai pelabel
+data latih adalah praktik yang lazim bila label manusia mahal, asalkan
+dilaporkan terang dan diuji pada label manusia. Tulis di laporan: model LLM,
+versi, suhu 0, seed, dan pedomannya.
+
+Tabel hasil `evaluasi_model` menyusun tingkat pendekatan berurutan:
 mayoritas (tanpa model) → leksikon (aturan, tanpa belajar) → TF-IDF + NB/SVM
 (belajar dari data, kata lepas tanpa konteks) → IndoBERT (belajar dari data,
-membaca konteks). Selisih antar-tingkat menunjukkan dari mana peningkatan
-datang. Model klasik membaca masukan yang sama persis dengan IndoBERT — teks
+membaca konteks), ditambah LLM zero-shot (tanpa pelatihan) dan IndoBERT tanpa
+segmen emiten (ablasi). Selisih antar-tingkat menunjukkan dari mana peningkatan
+datang; selisih IndoBERT − ablasi mengukur manfaat label per emiten. Setiap
+model juga diberi Cohen's kappa terhadap anotator manusia. Model klasik membaca masukan yang sama persis dengan IndoBERT — teks
 berita plus segmen emiten — supaya selisihnya mencerminkan metode, bukan
 banyaknya informasi yang diberikan.
 
@@ -658,6 +686,21 @@ dipindah ke tabel `pemetaan_ditolak` beserta kutipan buktinya. Berita itu tidak
 lagi menggeser skor emiten tersebut, dan pengaya tidak membuat ulang kaitannya.
 Tabel itu sekaligus bahan untuk mengukur dan memperbaiki presisi pemetaan.
 Tabel baru ini dibuat oleh `python -m scripts.init_db` (aman dijalankan ulang).
+
+## Analisis lanjutan: regresi panel dan event study
+
+```bash
+python -m scripts.unduh_harga 2026-01-01 2026-12-31 --indeks   # IHSG -> data/indeks/IHSG.csv
+python -m scripts.analisis_lanjutan
+```
+
+Korelasi per emiten hanya punya beberapa hari data. `analisis_lanjutan`
+menggabungkan seluruh emiten dalam **regresi panel** (efek tetap emiten,
+return IHSG sebagai kontrol, galat baku terkluster per emiten) dan menjalankan
+**event study** dengan market model di sekitar hari bersentimen ekstrem.
+Keduanya dihitung dengan dan tanpa artikel rekap. Hasil disimpan di
+`data/analisis/laporan_analisis.md`; jalankan ulang setelah data bertambah —
+angka dari beberapa minggu data adalah gambaran awal, bukan kesimpulan.
 
 ## Temuan yang harus masuk laporan: dominasi artikel rekap
 
