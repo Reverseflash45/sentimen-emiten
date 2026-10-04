@@ -69,13 +69,13 @@ jobs:
           # jadi rentangnya selalu dari awal periode penelitian sampai besok
           # (batas akhir yfinance bersifat eksklusif).
           SAMPAI=$(date -u -d tomorrow +%F)
-          python -m scripts.unduh_harga 2026-01-01 "$SAMPAI"
+          python -m scripts.unduh_harga 2026-01-01 "$SAMPAI" --indeks
           python -m scripts.impor_harga data/harga 2026-01-01 "$SAMPAI"
       - name: Simpan CSV harga ke repo
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/harga
+          git add data/harga data/indeks
           if git diff --cached --quiet; then
             echo "Tidak ada harga baru."
           else

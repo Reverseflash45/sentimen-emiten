@@ -78,7 +78,12 @@ def _label_terpilih(labels: list[LabelSentimen]) -> LabelSentimen | None:
     if not labels:
         return None
     analis = [l for l in labels if l.asal == AsalLabel.ANALIS]
-    kandidat = analis or labels
+    # Label LLM (versi "llm-*") adalah label perak untuk data latih dan metode
+    # pembanding, bukan label produksi: dasbor dan analisis memakai satu sumber
+    # model yang konsisten sepanjang waktu, bukan campuran yang bergantung pada
+    # berita mana yang kebetulan sempat dilabeli LLM.
+    produksi = [l for l in labels if l.asal != AsalLabel.ANALIS and not l.versi_model.startswith("llm-")]
+    kandidat = analis or produksi or labels
     return max(kandidat, key=lambda l: l.dibuat_pada)
 
 

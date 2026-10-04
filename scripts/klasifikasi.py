@@ -23,12 +23,15 @@ def main() -> None:
     p = argparse.ArgumentParser(description="Pelabelan sentimen berita")
     p.add_argument("--batas", type=int, default=None, help="jumlah berita maksimum")
     p.add_argument("--ulangi", action="store_true", help="proses ulang berita yang sudah dilabeli")
-    p.add_argument("--model", choices=["leksikon", "nb", "svm", "indobert"], default="leksikon")
+    p.add_argument("--model", choices=["leksikon", "nb", "svm", "indobert", "llm"], default="leksikon")
     argumen = p.parse_args()
 
     if argumen.model == "indobert":
         from app.klasifikasi.indobert import PengklasifikasiIndoBERT
         model = PengklasifikasiIndoBERT()
+    elif argumen.model == "llm":
+        from app.klasifikasi.llm import PengklasifikasiLLM
+        model = PengklasifikasiLLM()
     elif argumen.model in ("nb", "svm"):
         from app.klasifikasi.klasik import PengklasifikasiKlasik
         model = PengklasifikasiKlasik(argumen.model)

@@ -125,3 +125,20 @@ def test_di_luar_rentang_tidak_ikut(db):
 
 def test_emiten_tidak_dikenal(db):
     assert hitung_skor_harian(db, "XXXX", date(2026, 9, 1), date(2026, 9, 30)) == []
+
+
+def test_label_llm_bukan_label_produksi():
+    # label perak LLM tidak boleh menggeser label model produksi di dasbor,
+    # walau dibuat lebih baru
+    from datetime import datetime, timezone
+
+    from app.analitik.agregasi import _label_terpilih
+    from app.models import AsalLabel, LabelSentimen, Sentimen
+
+    t = lambda jam: datetime(2026, 9, 20, jam, tzinfo=timezone.utc)  # noqa: E731
+    leks = LabelSentimen(sentimen=Sentimen.NETRAL, asal=AsalLabel.MODEL, versi_model="leksikon-v1", dibuat_pada=t(1))
+    llm = LabelSentimen(sentimen=Sentimen.POSITIF, asal=AsalLabel.MODEL, versi_model="llm-qwen2.5-7b", dibuat_pada=t(2))
+    analis = LabelSentimen(sentimen=Sentimen.NEGATIF, asal=AsalLabel.ANALIS, versi_model="-", dibuat_pada=t(0))
+    assert _label_terpilih([leks, llm]) is leks
+    assert _label_terpilih([leks, llm, analis]) is analis
+    assert _label_terpilih([llm]) is llm  # tidak ada pilihan lain

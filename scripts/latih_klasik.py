@@ -3,6 +3,7 @@
     pip install -r requirements-ml.txt
     python -m scripts.latih_klasik              # keduanya
     python -m scripts.latih_klasik --jenis svm
+    python -m scripts.latih_klasik --perak auto   # + label LLM untuk data latih
 
 Data dan pembagiannya sama dengan scripts/latih_indobert.py: label emas
 buatan manusia, per berita, 70/15/15. Hiperparameter (alpha untuk NB, C untuk
@@ -22,7 +23,7 @@ import time
 from collections import Counter
 
 from app.database import SessionLocal
-from app.klasifikasi.dataset import muat_label_emas
+from app.klasifikasi.dataset import muat_data_latih, versi_llm_terbaru
 from app.klasifikasi.klasik import JENIS, VERSI, latih, lokasi_model
 
 MINIMAL_LATIH = 200
@@ -33,16 +34,20 @@ def main() -> None:
     p.add_argument("--jenis", choices=[*JENIS, "semua"], default="semua")
     p.add_argument("--folder", default=None, help="folder keluaran (bawaan: MODEL_KLASIK / model)")
     p.add_argument("--paksa", action="store_true", help=f"tetap latih walau data latih < {MINIMAL_LATIH}")
+    p.add_argument("--perak", default=None,
+                   help="versi label LLM (mis. llm-qwen2.5-7b) atau 'auto' untuk melengkapi data latih/validasi")
     a = p.parse_args()
 
     import joblib
 
     with SessionLocal() as s:
-        data = muat_label_emas(s)
+        perak = versi_llm_terbaru(s) if a.perak == "auto" else a.perak
+        data = muat_data_latih(s, perak)
     data_latih = [c for c in data if c.bagian == "latih"]
     validasi = [c for c in data if c.bagian == "validasi"]
-    print(f"Label emas: {len(data)} (latih {len(data_latih)}, validasi {len(validasi)}, "
-          f"uji {len(data) - len(data_latih) - len(validasi)} — disimpan untuk evaluasi)")
+    asal = Counter(c.asal for c in data)
+    print(f"Data latih {len(data_latih)}, validasi {len(validasi)} — sumber label: {dict(asal)}"
+          + (f" (perak: {perak})" if perak else "") + ". Bagian uji tidak disentuh.")
     print("Sebaran latih:", dict(Counter(c.sentimen.value for c in data_latih)))
     if len(data_latih) < MINIMAL_LATIH and not a.paksa:
         sys.exit(f"Data latih baru {len(data_latih)}. Tambah label dengan scripts.label_manual "
@@ -63,6 +68,8 @@ def main() -> None:
             "macro_f1_validasi": round(hasil.f1_validasi, 4),
             "semua_percobaan": [{"param": prm, "macro_f1_validasi": round(f1, 4)} for prm, f1 in hasil.percobaan],
             "jumlah": {"latih": len(data_latih), "validasi": len(validasi)},
+            "sumber_label": {"perak": perak, "per_asal": dict(asal)},
+            "catatan_validasi": "terhadap label perak LLM" if perak else "terhadap label manusia",
             "durasi_detik": round(time.time() - mulai, 2),
         }
         joblib.dump({"pipeline": hasil.pipeline, "metrik": metrik}, jalur)

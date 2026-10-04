@@ -3,6 +3,8 @@
     pip install -r requirements-ml.txt
     python -m scripts.latih_indobert
     python -m scripts.latih_indobert --epoch 6 --lr 3e-5
+    python -m scripts.latih_indobert --perak auto                 # + label LLM
+    python -m scripts.latih_indobert --perak auto --tanpa-target  # ablasi
 
 Data: label emas buatan manusia (scripts/label_manual.py), dibagi per berita
 menjadi latih/validasi/uji (lihat app/klasifikasi/dataset.py). Bagian UJI tidak
@@ -26,8 +28,8 @@ from collections import Counter
 from pathlib import Path
 
 from app.database import SessionLocal
-from app.klasifikasi.dataset import KELAS, Contoh, muat_label_emas
-from app.klasifikasi.indobert import LOKASI_BAWAAN, PANJANG_MAKS
+from app.klasifikasi.dataset import KELAS, Contoh, muat_data_latih, versi_llm_terbaru
+from app.klasifikasi.indobert import LOKASI_BAWAAN, LOKASI_TANPA_TARGET, PANJANG_MAKS
 
 MODEL_DASAR = "indobenchmark/indobert-base-p1"
 MINIMAL_LATIH = 200
@@ -36,7 +38,11 @@ MINIMAL_LATIH = 200
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--dasar", default=MODEL_DASAR, help="model pra-latih dari Hugging Face")
-    p.add_argument("--keluaran", default=LOKASI_BAWAAN)
+    p.add_argument("--keluaran", default=None, help=f"bawaan {LOKASI_BAWAAN} (atau {LOKASI_TANPA_TARGET})")
+    p.add_argument("--perak", default=None,
+                   help="versi label LLM (mis. llm-qwen2.5-7b) atau 'auto' untuk melengkapi data latih/validasi")
+    p.add_argument("--tanpa-target", action="store_true",
+                   help="ablasi: model hanya membaca teks berita, tanpa segmen emiten")
     p.add_argument("--epoch", type=int, default=5)
     p.add_argument("--lr", type=float, default=2e-5)
     p.add_argument("--batch", type=int, default=16)
@@ -54,12 +60,15 @@ def main() -> None:
     np.random.seed(a.seed)
     torch.manual_seed(a.seed)
 
+    a.keluaran = a.keluaran or (LOKASI_TANPA_TARGET if a.tanpa_target else LOKASI_BAWAAN)
     with SessionLocal() as s:
-        data = muat_label_emas(s)
+        perak = versi_llm_terbaru(s) if a.perak == "auto" else a.perak
+        data = muat_data_latih(s, perak)
     latih = [c for c in data if c.bagian == "latih"]
     validasi = [c for c in data if c.bagian == "validasi"]
-    print(f"Label emas: {len(data)} (latih {len(latih)}, validasi {len(validasi)}, "
-          f"uji {len(data) - len(latih) - len(validasi)} — disimpan untuk evaluasi)")
+    print(f"Data latih {len(latih)}, validasi {len(validasi)} — sumber label: "
+          f"{dict(Counter(c.asal for c in data))}" + (f" (perak: {perak})" if perak else "")
+          + (" · ABLASI tanpa segmen emiten" if a.tanpa_target else "") + ". Bagian uji tidak disentuh.")
     print("Sebaran latih:", dict(Counter(c.sentimen.value for c in latih)))
     if len(latih) < MINIMAL_LATIH and not a.paksa:
         sys.exit(f"Data latih baru {len(latih)}. Tambah label dengan scripts.label_manual "
@@ -79,8 +88,12 @@ def main() -> None:
     ).to(perangkat)
 
     def kumpulkan(contoh: list[Contoh]):
-        enc = tokenizer([c.teks for c in contoh], [c.target for c in contoh], truncation="longest_first",
-                        max_length=PANJANG_MAKS, padding=True, return_tensors="pt")
+        if a.tanpa_target:
+            enc = tokenizer([c.teks for c in contoh], truncation=True,
+                            max_length=PANJANG_MAKS, padding=True, return_tensors="pt")
+        else:
+            enc = tokenizer([c.teks for c in contoh], [c.target for c in contoh], truncation="longest_first",
+                            max_length=PANJANG_MAKS, padding=True, return_tensors="pt")
         enc["labels"] = torch.tensor([indeks[c.sentimen] for c in contoh])
         return enc
 
@@ -152,6 +165,9 @@ def main() -> None:
     metrik = {
         "model_dasar": a.dasar, "epoch_terbaik": epoch_terbaik, "macro_f1_validasi": round(terbaik, 4),
         "jumlah": {"latih": len(latih), "validasi": len(validasi)},
+        "tanpa_target": a.tanpa_target,
+        "sumber_label": {"perak": perak, "per_asal": dict(Counter(c.asal for c in data))},
+        "catatan_validasi": "terhadap label perak LLM" if perak else "terhadap label manusia",
         "sebaran_latih": {KELAS[i].value: hitung[i] for i in range(len(KELAS))},
         "hiperparameter": {"epoch_maks": a.epoch, "lr": a.lr, "batch": a.batch, "seed": a.seed,
                            "panjang_maks": PANJANG_MAKS},

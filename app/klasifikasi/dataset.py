@@ -60,7 +60,8 @@ class Contoh:
     sentimen: Sentimen
     bagian: str
     #: "anotasi" = dilabeli buta lewat scripts.label_manual; "koreksi" = dibuat
-    #: di dasbor sambil melihat label model (bisa terpengaruh / anchoring)
+    #: di dasbor sambil melihat label model (bisa terpengaruh / anchoring);
+    #: "perak" = label LLM, hanya untuk data latih/validasi (lihat muat_data_latih)
     asal: str = "anotasi"
 
 
@@ -91,3 +92,50 @@ def muat_label_emas(session: Session) -> list[Contoh]:
             asal="anotasi" if label.versi_model == VERSI_ANOTASI else "koreksi",
         )
     return sorted(terbaru.values(), key=lambda c: (c.berita_id, c.kode))
+
+
+def versi_llm_terbaru(session: Session) -> str | None:
+    """Versi label LLM yang paling banyak tersimpan, mis. "llm-qwen2.5-7b"."""
+    from sqlalchemy import func
+
+    baris = session.execute(
+        select(LabelSentimen.versi_model, func.count(LabelSentimen.id))
+        .where(LabelSentimen.asal == AsalLabel.MODEL, LabelSentimen.versi_model.like("llm-%"))
+        .group_by(LabelSentimen.versi_model)
+        .order_by(func.count(LabelSentimen.id).desc())
+    ).first()
+    return baris[0] if baris else None
+
+
+def muat_data_latih(session: Session, perak: str | None = None) -> list[Contoh]:
+    """Data untuk bagian LATIH dan VALIDASI.
+
+    Label manusia selalu dipakai lebih dulu. Bila `perak` diberikan (versi
+    label LLM), pasangan yang belum punya label manusia diisi label LLM.
+    Bagian UJI tidak pernah dikembalikan oleh fungsi ini — data uji hanya
+    berasal dari label manusia buta (lihat scripts/evaluasi_model.py), apa pun
+    sumber label latihnya.
+    """
+    emas = [c for c in muat_label_emas(session) if c.bagian != "uji"]
+    if not perak:
+        return emas
+    sudah = {(c.berita_id, c.kode) for c in emas}
+    tambahan: list[Contoh] = []
+    for label, berita, emiten, kutipan in session.execute(
+        select(LabelSentimen, Berita, Emiten, BeritaEmiten.kutipan)
+        .join(Berita, Berita.id == LabelSentimen.berita_id)
+        .join(Emiten, Emiten.id == LabelSentimen.emiten_id)
+        .join(BeritaEmiten, (BeritaEmiten.berita_id == LabelSentimen.berita_id)
+              & (BeritaEmiten.emiten_id == LabelSentimen.emiten_id))
+        .where(LabelSentimen.asal == AsalLabel.MODEL, LabelSentimen.versi_model == perak)
+    ).all():
+        bagian = bagian_data(berita.id)
+        if bagian == "uji" or (berita.id, emiten.kode) in sudah:
+            continue
+        tambahan.append(Contoh(
+            berita_id=berita.id, kode=emiten.kode,
+            teks=teks_utama(berita.judul, berita.ringkasan),
+            target=teks_target(emiten.kode, emiten.nama, kutipan),
+            sentimen=label.sentimen, bagian=bagian, asal="perak",
+        ))
+    return sorted(emas + tambahan, key=lambda c: (c.berita_id, c.kode))

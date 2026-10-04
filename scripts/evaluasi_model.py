@@ -11,6 +11,14 @@ Yang dibandingkan (SRS 10.2):
                 belajar dari data, tapi membaca kata lepas tanpa konteks.
   - indobert  : hasil scripts/latih_indobert.py — belajar dari data dan
                 membaca kata dalam konteksnya.
+  - indobert-tanpa-target : ablasi, IndoBERT tanpa segmen emiten. Selisihnya
+                dengan IndoBERT penuh mengukur manfaat label per emiten.
+  - llm       : LLM zero-shot (scripts/label_llm.py), tanpa pelatihan, hanya
+                pedoman anotasi. Labelnya juga dipakai sebagai label perak
+                untuk data latih — tetapi tidak pernah untuk data uji.
+
+Selain akurasi dan F1, dilaporkan Cohen's kappa: kesepakatan model dengan
+anotator manusia setelah dikoreksi kesepakatan yang terjadi kebetulan.
 Model yang belum dilatih dilewati dengan pemberitahuan, bukan galat.
 
 Setiap selisih macro-F1 dilengkapi selang kepercayaan 95% dari bootstrap
@@ -36,7 +44,10 @@ from pathlib import Path
 
 from app.database import SessionLocal
 from app.klasifikasi import PengklasifikasiLeksikon
-from app.klasifikasi.dataset import KELAS, muat_label_emas
+from sqlalchemy import select
+
+from app.klasifikasi.dataset import KELAS, muat_data_latih, muat_label_emas, versi_llm_terbaru
+from app.models import AsalLabel, Emiten, LabelSentimen
 from app.klasifikasi.klasik import JENIS, VERSI, PengklasifikasiKlasik, lokasi_model
 
 LAPORAN = Path("data/anotasi/laporan_evaluasi.md")
@@ -52,8 +63,12 @@ def metrik(benar: list[str], tebak: list[str]) -> dict:
         p = tp / (tp + fp) if tp + fp else 0.0
         r = tp / (tp + fn) if tp + fn else 0.0
         per_kelas[k] = {"presisi": p, "recall": r, "f1": 2 * p * r / (p + r) if p + r else 0.0, "n": tp + fn}
+    n = len(benar)
+    teramati = sum(b == t for b, t in zip(benar, tebak)) / n
+    harapan = sum((benar.count(k) / n) * (tebak.count(k) / n) for k in kelas)
     return {
-        "akurasi": sum(b == t for b, t in zip(benar, tebak)) / len(benar),
+        "akurasi": teramati,
+        "kappa": (teramati - harapan) / (1 - harapan) if harapan < 1 else 0.0,
         "macro_f1": sum(v["f1"] for v in per_kelas.values()) / len(kelas),
         "per_kelas": per_kelas,
         "matriks": {b: {t: sum(1 for x, y in zip(benar, tebak) if x == b and y == t) for t in kelas} for b in kelas},
@@ -75,10 +90,10 @@ def selang_selisih(benar, tebak_a, tebak_b, ulang=2000, seed=0) -> tuple[float, 
 
 def tabel_md(nama_hasil: dict[str, dict]) -> str:
     kelas = [k.value for k in KELAS]
-    s = "| Model | Akurasi | Macro-F1 | " + " | ".join(f"F1 {k}" for k in kelas) + " |\n"
-    s += "|---|---|---|" + "---|" * len(kelas) + "\n"
+    s = "| Model | Akurasi | Macro-F1 | Kappa | " + " | ".join(f"F1 {k}" for k in kelas) + " |\n"
+    s += "|---|---|---|---|" + "---|" * len(kelas) + "\n"
     for nama, m in nama_hasil.items():
-        s += f"| {nama} | {m['akurasi']:.3f} | **{m['macro_f1']:.3f}** | " + \
+        s += f"| {nama} | {m['akurasi']:.3f} | **{m['macro_f1']:.3f}** | {m['kappa']:.3f} | " + \
              " | ".join(f"{m['per_kelas'][k]['f1']:.3f}" for k in kelas) + " |\n"
     return s
 
@@ -99,10 +114,19 @@ def main() -> None:
 
     with SessionLocal() as s:
         data = muat_label_emas(s)
+        versi_llm = versi_llm_terbaru(s)
+        latih = [c for c in muat_data_latih(s, versi_llm) if c.bagian == "latih"]
+        label_llm = {}
+        if versi_llm:
+            for berita_id, kode, sentimen in s.execute(
+                select(LabelSentimen.berita_id, Emiten.kode, LabelSentimen.sentimen)
+                .join(Emiten, Emiten.id == LabelSentimen.emiten_id)
+                .where(LabelSentimen.asal == AsalLabel.MODEL, LabelSentimen.versi_model == versi_llm)
+            ).all():
+                label_llm[(berita_id, kode)] = sentimen.value
     # Hanya label buta: koreksi di dasbor dibuat sambil melihat tebakan model,
     # sehingga cenderung setuju dengannya dan akan menggelembungkan skor model.
     uji = [c for c in data if c.bagian == "uji" and c.asal == "anotasi"]
-    latih = [c for c in data if c.bagian == "latih"]
     if len(uji) < 30:
         raise SystemExit(f"Data uji baru {len(uji)} contoh — terlalu sedikit untuk angka yang bermakna. "
                          "Tambah label dengan scripts.label_manual.")
@@ -122,12 +146,27 @@ def main() -> None:
         m = PengklasifikasiKlasik(jenis)
         tebakan[m.versi] = [pr.sentimen.value for pr in m.prediksi_emiten_banyak(pasangan_uji)]
 
-    versi_ib = None
+    versi_ib = versi_ablasi = None
     if not a.tanpa_indobert:
-        from app.klasifikasi.indobert import PengklasifikasiIndoBERT
-        ib = PengklasifikasiIndoBERT(a.model)
-        versi_ib = ib.versi
-        tebakan[ib.versi] = [pr.sentimen.value for pr in ib.prediksi_emiten_banyak(pasangan_uji)]
+        from app.klasifikasi.indobert import LOKASI_BAWAAN, LOKASI_TANPA_TARGET, PengklasifikasiIndoBERT
+        lokasi = a.model or LOKASI_BAWAAN
+        if Path(lokasi).exists() or a.model:
+            ib = PengklasifikasiIndoBERT(lokasi)
+            versi_ib = ib.versi
+            tebakan[ib.versi] = [pr.sentimen.value for pr in ib.prediksi_emiten_banyak(pasangan_uji)]
+        else:
+            print(f"(IndoBERT dilewati — {lokasi} belum ada: python -m scripts.latih_indobert)")
+        if Path(LOKASI_TANPA_TARGET).exists():
+            ab = PengklasifikasiIndoBERT(LOKASI_TANPA_TARGET)
+            versi_ablasi = ab.versi
+            tebakan[ab.versi] = [pr.sentimen.value for pr in ab.prediksi_emiten_banyak(pasangan_uji)]
+
+    if versi_llm:
+        hilang = [c for c in uji if (c.berita_id, c.kode) not in label_llm]
+        if hilang:
+            print(f"({versi_llm} dilewati — {len(hilang)} pasangan uji belum dilabeli: python -m scripts.label_llm)")
+        else:
+            tebakan[versi_llm] = [label_llm[(c.berita_id, c.kode)] for c in uji]
 
     for nama, tebak in tebakan.items():
         hasil[nama] = metrik(benar, tebak)
@@ -136,6 +175,10 @@ def main() -> None:
     banding = [(n, leks.versi) for n in tebakan if n != leks.versi]
     if versi_ib:
         banding += [(versi_ib, VERSI[j]) for j in JENIS if VERSI[j] in tebakan]
+        if versi_ablasi:
+            banding.append((versi_ib, versi_ablasi))  # manfaat segmen emiten
+        if versi_llm in tebakan:
+            banding.append((versi_ib, versi_llm))  # dilatih vs tanpa pelatihan
     catatan_selisih = ""
     if banding:
         catatan_selisih = ("\n## Selisih macro-F1\n\nSelang kepercayaan 95% dari bootstrap berpasangan "

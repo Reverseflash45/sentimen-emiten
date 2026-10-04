@@ -10,12 +10,16 @@ variabel lingkungan MODEL_INDOBERT (bawaan: model/indobert-sentimen).
 
 from __future__ import annotations
 
+import json
 import os
+from pathlib import Path
 
 from app.klasifikasi.basis import Pengklasifikasi, Prediksi
 from app.models import Sentimen
 
 LOKASI_BAWAAN = "model/indobert-sentimen"
+#: model ablasi: dilatih hanya dengan teks berita, tanpa segmen emiten
+LOKASI_TANPA_TARGET = "model/indobert-tanpa-target"
 PANJANG_MAKS = 192
 
 
@@ -35,6 +39,11 @@ class PengklasifikasiIndoBERT(Pengklasifikasi):
         self.ukuran_batch = ukuran_batch
         # urutan kelas dibaca dari konfigurasi model, bukan diasumsikan
         self.kelas = [Sentimen(self.model.config.id2label[i]) for i in range(self.model.config.num_labels)]
+        # model ablasi harus diberi masukan persis seperti saat dilatih: tanpa segmen emiten
+        metrik = Path(self.lokasi) / "metrik.json"
+        self.tanpa_target = bool(metrik.exists() and json.loads(metrik.read_text(encoding="utf-8")).get("tanpa_target"))
+        if self.tanpa_target:
+            self.versi = "indobert-tanpa-target-v1"
 
     def prediksi(self, teks: str) -> Prediksi:
         return self.prediksi_emiten(teks, "")
@@ -47,10 +56,14 @@ class PengklasifikasiIndoBERT(Pengklasifikasi):
         torch = self._torch
         for i in range(0, len(pasangan), self.ukuran_batch):
             potong = pasangan[i : i + self.ukuran_batch]
-            masukan = self.tokenizer(
-                [t for t, _ in potong], [s for _, s in potong],  # selalu berpasangan, sama seperti saat dilatih
-                truncation="longest_first", max_length=PANJANG_MAKS, padding=True, return_tensors="pt",
-            ).to(self.perangkat)
+            if self.tanpa_target:
+                masukan = self.tokenizer([t for t, _ in potong], truncation=True, max_length=PANJANG_MAKS,
+                                         padding=True, return_tensors="pt").to(self.perangkat)
+            else:
+                masukan = self.tokenizer(
+                    [t for t, _ in potong], [s for _, s in potong],  # berpasangan, sama seperti saat dilatih
+                    truncation="longest_first", max_length=PANJANG_MAKS, padding=True, return_tensors="pt",
+                ).to(self.perangkat)
             with torch.inference_mode():
                 peluang = torch.softmax(self.model(**masukan).logits.float(), dim=-1).cpu()
             for p in peluang:

@@ -3,6 +3,7 @@ menguji IndoBERT.
 
     python -m scripts.label_manual            # mulai / lanjutkan
     python -m scripts.label_manual --target 1000
+    python -m scripts.label_manual --hanya-uji --target 200   # cukup data uji
 
 Satu tombol per pasangan berita-emiten:
     1 positif   2 netral   3 negatif
@@ -36,31 +37,11 @@ from sqlalchemy import select
 
 from app.database import SessionLocal
 from app.ingest.penolakan import tolak_pemetaan
-from app.klasifikasi.dataset import VERSI_ANOTASI
+from app.klasifikasi.dataset import VERSI_ANOTASI, bagian_data
+from app.klasifikasi.pedoman import PEDOMAN
 from app.models import AsalLabel, Berita, BeritaEmiten, Emiten, LabelSentimen, Sentimen, SumberBerita
 
 BERKAS_TIDAK_RELEVAN = Path("data/anotasi/tidak_relevan.csv")
-
-PEDOMAN = """
-PEDOMAN — nilai dari sudut pandang investor emiten yang DITAMPILKAN, bukan
-nada artikel secara umum. Bila satu berita menyebut beberapa emiten, tiap
-emiten dinilai sendiri-sendiri.
-
-  1 POSITIF  cenderung menaikkan penilaian investor terhadap emiten ini:
-             laba/pendapatan naik, kontrak/proyek baru, dividen, buyback,
-             rekomendasi beli, target harga naik, ekspansi, izin terbit.
-  2 NETRAL   tanpa arah jelas bagi emiten ini: jadwal RUPS/pengumuman rutin,
-             rekap pasar yang hanya menyebut emiten sekilas, berita campuran
-             yang seimbang, fakta tanpa implikasi.
-  3 NEGATIF  cenderung menurunkan penilaian: rugi/laba turun, gugatan, denda,
-             suspensi, gagal bayar, rekomendasi jual, target harga turun,
-             regulasi yang merugikan, harga anjlok karena masalah emiten.
-  x TIDAK RELEVAN  berita sebenarnya tidak membahas emiten ini
-             (mis. "bank mandiri" di iklan promo). Tidak dijadikan label.
-
-Ragu antara netral dan yang lain? Pilih netral. Konsistensi lebih penting
-daripada ketepatan satu-dua berita.
-"""
 
 WARNA = sys.stdout.isatty() and os.environ.get("NO_COLOR") is None
 def _w(kode: str, teks: str) -> str:
@@ -104,6 +85,9 @@ def catat_tidak_relevan(berita_id: int, emiten_id: int, kode: str) -> None:
 def main() -> None:
     p = argparse.ArgumentParser(description="Anotasi manual label sentimen")
     p.add_argument("--target", type=int, default=1000, help="jumlah label yang dituju (untuk progres)")
+    p.add_argument("--hanya-uji", action="store_true",
+                   help="hanya pasangan di bagian UJI — data latih bisa memakai label perak LLM, "
+                        "tetapi data uji wajib label manusia")
     a = p.parse_args()
 
     if WARNA and os.name == "nt":
@@ -121,6 +105,9 @@ def main() -> None:
             .join(SumberBerita, SumberBerita.id == Berita.sumber_id)
         ).all()
         lewati = sudah | abaikan
+        if a.hanya_uji:
+            baris = [r for r in baris if bagian_data(r[0].berita_id) == "uji"]
+            sudah = {k for k in sudah if bagian_data(k[0]) == "uji"}
         antrean = sorted(
             (r for r in baris if (r[0].berita_id, r[0].emiten_id) not in lewati),
             key=lambda r: urutan_acak(r[0].berita_id, r[0].emiten_id),
