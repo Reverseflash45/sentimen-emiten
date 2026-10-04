@@ -20,6 +20,7 @@ Setiap hari yang terlewat adalah lubang permanen di data.
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 import traceback
 from datetime import datetime, timezone
@@ -35,6 +36,22 @@ from app.klasifikasi.jalankan import klasifikasi_berita_baru
 from data.lq45 import status_periode
 
 FOLDER_LOG = Path("data/log")
+
+
+def model_produksi(catat):
+    """IndoBERT bila MODEL_INDOBERT diatur dan bisa dimuat; selain itu leksikon.
+
+    Gagal memuat IndoBERT (pustaka belum terpasang, model tak terunduh) tidak
+    boleh menghentikan pelabelan: berita tetap dilabeli leksikon dan
+    kegagalannya tercatat, supaya tidak ada hari tanpa label.
+    """
+    if os.environ.get("MODEL_INDOBERT"):
+        try:
+            from app.klasifikasi.indobert import PengklasifikasiIndoBERT
+            return PengklasifikasiIndoBERT()
+        except Exception as e:  # noqa: BLE001
+            catat(f"klasifikasi: IndoBERT gagal dimuat ({type(e).__name__}: {e}); memakai leksikon")
+    return PengklasifikasiLeksikon()
 
 
 class Pencatat:
@@ -100,7 +117,7 @@ def main() -> None:
 
     # 3. labeli berita yang belum punya label
     try:
-        model = PengklasifikasiLeksikon()
+        model = model_produksi(catat)
         with SessionLocal() as session:
             hasil = klasifikasi_berita_baru(session, model)
         catat(f"klasifikasi: {model.versi} {hasil.ringkas()}")

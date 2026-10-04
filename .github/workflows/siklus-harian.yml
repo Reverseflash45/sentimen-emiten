@@ -7,6 +7,8 @@
 # Rahasia yang wajib diisi (Settings → Secrets and variables → Actions):
 #   DATABASE_URL  URL PostgreSQL Supabase (session pooler, port 5432)
 #   USER_AGENT    identitas crawler yang bisa dihubungi, mis. "SentimenEmitenBot/0.1 (email@contoh.com)"
+# Opsional — IndoBERT sebagai label produksi (lihat scripts/unggah_model.py):
+#   MODEL_INDOBERT  nama-akun/nama-model di Hugging Face; HF_TOKEN bila privat
 # Opsional — notifikasi email (tanpa ini hanya notifikasi di aplikasi):
 #   SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_FROM
 
@@ -42,6 +44,8 @@ jobs:
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       USER_AGENT: ${{ secrets.USER_AGENT }}
+      MODEL_INDOBERT: ${{ secrets.MODEL_INDOBERT }}
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
       SMTP_HOST: ${{ secrets.SMTP_HOST }}
       SMTP_PORT: ${{ secrets.SMTP_PORT }}
       SMTP_USER: ${{ secrets.SMTP_USER }}
@@ -54,6 +58,19 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: pip install -r requirements.txt
+      # IndoBERT hanya dipasang bila model produksinya diatur. Versi CPU:
+      # runner GitHub tidak punya GPU, dan wheel CUDA berukuran gigabyte.
+      - name: Pasang IndoBERT (CPU)
+        if: env.MODEL_INDOBERT != ''
+        run: |
+          pip install "torch>=2.6" --index-url https://download.pytorch.org/whl/cpu
+          pip install "transformers>=4.44,<5"
+      - name: Cache model Hugging Face
+        if: env.MODEL_INDOBERT != ''
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: hf-${{ env.MODEL_INDOBERT }}
       - name: Kumpulkan, petakan, dan labeli berita
         run: python -m scripts.siklus_harian --log ""
 

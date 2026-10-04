@@ -77,3 +77,15 @@ def test_pearson_menolak_nan_bukan_diam_diam_menghasilkan_nan():
     # NaN yang lolos menghasilkan koefisien NaN berlabel "sangat kuat"
     with pytest.raises(ValueError):
         pearson([0.1, 0.2, 0.3, 0.4], [0.01, float("nan"), 0.02, 0.03])
+
+
+def test_skor_sus():
+    from scripts.skor_sus import huruf, keberterimaan, skor_responden
+
+    assert skor_responden([5, 1] * 5) == 100.0   # jawaban terbaik
+    assert skor_responden([1, 5] * 5) == 0.0     # jawaban terburuk
+    assert skor_responden([3] * 10) == 50.0
+    assert (keberterimaan(72), keberterimaan(60), keberterimaan(40)) == ("dapat diterima", "marginal", "tidak dapat diterima")
+    assert huruf(68) == "C" and huruf(85) == "A+"
+    with pytest.raises(ValueError):
+        skor_responden([3] * 9)

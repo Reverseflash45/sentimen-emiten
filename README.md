@@ -44,7 +44,7 @@ python -m scripts.periksa_pemetaan --acak   # periksa presisi pemetaan manual
 python -m scripts.bersihkan_pemetaan --lihat  # buang pemetaan lama bila aturan berubah
 python -m scripts.verifikasi --csv data/keterbukaan/contoh.csv
 python -m scripts.buat_pengguna anda@contoh.id "Nama Anda" --peran analis
-pytest -q                       # 240 uji
+pytest -q                       # 257 uji
 ```
 
 Menjalankan API dan dasbor:
@@ -161,7 +161,7 @@ app/
 data/lq45.py           daftar emiten & portal berita
 scripts/               perintah baris perintah
 siklus.bat             pembungkus untuk Task Scheduler Windows
-tests/                 240 uji, semuanya tanpa jaringan
+tests/                 257 uji, semuanya tanpa jaringan
 ```
 
 ## Endpoint
@@ -231,8 +231,14 @@ membuat notifikasi di dalam aplikasi. Tiga pengaman:
 
 Notifikasi disimpan, bukan dihitung saat dasbor dibuka, supaya pengguna yang
 baru masuk beberapa hari kemudian tetap melihat perubahan yang terjadi selama
-ia tidak membuka dasbor. Saluran email sengaja belum dipakai: butuh akun
-pengirim dan izin pengguna, sementara notifikasi di aplikasi tidak.
+ia tidak membuka dasbor.
+
+**Email** bersifat opt-in: pengguna menyalakannya sendiri di panel notifikasi
+("Kirim juga ke email saya"). Pengiriman aktif setelah secret `SMTP_HOST`,
+`SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD` (dan opsional `SMTP_FROM`) diisi di
+GitHub Actions — untuk Gmail: `smtp.gmail.com`, port 587, dan *app password*
+dari pengaturan keamanan akun Google, bukan kata sandi akun. Tanpa itu siklus
+mencatat "email nonaktif" dan tetap berjalan.
 ## Akun dan peran
 
 ```bash
@@ -501,13 +507,18 @@ sama.
 
 ## Yang belum dikerjakan
 
+Yang tersisa bergantung pada manusia atau akun pihak ketiga, bukan kode:
+
 - Label manusia untuk data uji (287 pasangan per 4 Oktober 2026):
-  `python -m scripts.label_manual --hanya-uji`. NB, SVM, IndoBERT, dan ablasinya
-  sudah dilatih dengan label perak LLM; angka akhir menunggu data uji ini
-- Menjadikan IndoBERT label produksi dasbor — perlu inferensi terjadwal di
-  mesin yang punya model (GitHub Actions saat ini hanya menjalankan leksikon)
-- Notifikasi lewat email (notifikasi di dalam aplikasi sudah ada)
-- Verifikasi daftar LQ45 terhadap pengumuman resmi BEI terbaru
+  `python -m scripts.label_manual --hanya-uji`, lalu `scripts.evaluasi_model`.
+  Opsional: anotator kedua (`scripts.label_anotator2`) untuk kappa antar-manusia.
+- Daftar LQ45 periode berikutnya — komposisi di `data/lq45.py` berlaku sampai
+  30 Oktober 2026; halaman Admin dan log siklus memperingatkan sejak 14 hari
+  sebelumnya.
+- IndoBERT sebagai label produksi — kodenya siap; perlu akun Hugging Face dan
+  hasil evaluasi yang mendukung (lihat `scripts/unggah_model.py`).
+- Email notifikasi — kodenya siap; perlu akun SMTP pengirim.
+- Kuesioner SUS kepada responden (`data/pengujian/kuesioner_sus.md`).
 
 ## Batasan yang disengaja
 
@@ -704,6 +715,51 @@ return IHSG sebagai kontrol, galat baku terkluster per emiten) dan menjalankan
 Keduanya dihitung dengan dan tanpa artikel rekap. Hasil disimpan di
 `data/analisis/laporan_analisis.md`; jalankan ulang setelah data bertambah —
 angka dari beberapa minggu data adalah gambaran awal, bukan kesimpulan.
+
+Bagian ketiga laporan adalah **uji kausalitas Granger** per emiten, dua arah,
+dengan koreksi Bonferroni. Uji ini baru dijalankan setelah deret sentimen
+mencapai 40 hari bursa sejak hari sentimen pertama.
+
+## Pengujian dan kinerja (NF-01, NF-05)
+
+```bash
+python -m scripts.laporan_pengujian     # skenario black-box per UC/FR/NF dari hasil pytest
+python -m scripts.ukur_kinerja          # NF-01: waktu muat halaman live & waktu klasifikasi
+python -m scripts.skor_sus hasil.csv    # NF-05: skor SUS dari ekspor Google Forms
+```
+
+`laporan_pengujian` tidak mengisi status dengan tangan: setiap skenario
+(masukan → hasil yang diharapkan) dikaitkan dengan uji otomatis, dan
+dinyatakan lulus hanya bila uji-uji itu lulus saat laporan dibuat. Hasil di
+`data/pengujian/` dan `data/analisis/laporan_kinerja.md`.
+
+Kuesioner SUS memakai adaptasi bahasa Indonesia yang sudah divalidasi
+(Sharfina & Santoso, 2016), lengkap dengan tugas skenario untuk responden, di
+`data/pengujian/kuesioner_sus.md`.
+
+## Anotator kedua
+
+```bash
+python -m scripts.label_anotator2 --target 100   # dijalankan orang lain
+python -m scripts.kesepakatan_anotator           # Cohen's kappa antar-manusia
+```
+
+Label anotator kedua disimpan di `data/anotasi/anotator_2.csv`, bukan di basis
+data, supaya tidak menimpa label emas maupun angka dasbor. Kappa antar-manusia
+menunjukkan seberapa jelas tugas pelabelan ini dan menjadi batas atas wajar
+bagi model.
+
+## Cadangan basis data
+
+```bash
+python -m scripts.cadangkan_db          # pg_dump skema public ke Documents\Cadangan-Sentimen-Emiten
+```
+
+`cadangan.bat` terdaftar di Task Scheduler ("Sentimen Emiten - Cadangan", tiap
+4 minggu, menyusul bila laptop mati saat jadwalnya). Enam cadangan terakhir
+dipertahankan. Cadangan sengaja tidak masuk repo: isinya memuat email dan hash
+kata sandi, dan repositori ini publik. Memulihkan:
+`pg_restore --no-owner -d <URL tujuan> berkas.dump`.
 
 ## Temuan yang harus masuk laporan: dominasi artikel rekap
 

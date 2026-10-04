@@ -1,6 +1,6 @@
 # Analisis lanjutan sentimen dan harga
 
-Rentang sentimen 2026-09-01 s/d 2026-10-04. Dibuat 2026-10-04 11:40. Sesuai SRS 10.3, ini analisis hubungan, bukan prediksi harga.
+Rentang sentimen 2026-09-01 s/d 2026-10-04. Dibuat 2026-10-04 12:39. Sesuai SRS 10.3, ini analisis hubungan, bukan prediksi harga.
 
 ## Semua berita
 
@@ -30,6 +30,10 @@ _b_ dibaca: kenaikan skor sentimen 1 poin (skala −1…+1) berkaitan dengan per
 | negatif | [0,+1] | 39 | -1.97% | -1.81 | 0.078 |
 | negatif | [0,+3] | 39 | -3.05% | -1.81 | 0.078 |
 
+### Uji kausalitas Granger per emiten (lag 1–2 hari bursa)
+
+Belum dapat dijalankan: deret terpanjang baru 12 hari bursa sejak 2026-09-17 (hari sentimen pertama), butuh minimal 40. Jalankan ulang saat data bertambah.
+
 ## Tanpa artikel rekap (1 emiten per berita)
 
 159 pasangan emiten-hari bursa bersentimen, 40 emiten.
@@ -57,6 +61,10 @@ _b_ dibaca: kenaikan skor sentimen 1 poin (skala −1…+1) berkaitan dengan per
 | negatif | [-1,+1] | 7 | -4.51% | -1.13 | 0.301 |
 | negatif | [0,+1] | 7 | -3.90% | -0.95 | 0.380 |
 | negatif | [0,+3] | 7 | -6.85% | -0.87 | 0.418 |
+
+### Uji kausalitas Granger per emiten (lag 1–2 hari bursa)
+
+Belum dapat dijalankan: deret terpanjang baru 12 hari bursa sejak 2026-09-17 (hari sentimen pertama), butuh minimal 40. Jalankan ulang saat data bertambah.
 
 ## Cara membaca
 

@@ -136,3 +136,17 @@ def test_versi_model_berbeda_menambah_label_baru(db, model):
 
     versi = {l.versi_model for l in db.scalars(select(LabelSentimen))}
     assert versi == {"leksikon-v1", "leksikon-v2"}
+
+
+def test_siklus_memakai_leksikon_bila_indobert_tidak_diatur_atau_gagal(monkeypatch):
+    from app.klasifikasi.leksikon import PengklasifikasiLeksikon
+    from scripts.siklus_harian import model_produksi
+
+    catatan = []
+    monkeypatch.delenv("MODEL_INDOBERT", raising=False)
+    assert isinstance(model_produksi(catatan.append), PengklasifikasiLeksikon)
+
+    # model yang tidak ada: siklus tetap jalan dengan leksikon, kegagalannya tercatat
+    monkeypatch.setenv("MODEL_INDOBERT", "folder/yang/tidak-ada")
+    assert isinstance(model_produksi(catatan.append), PengklasifikasiLeksikon)
+    assert any("IndoBERT gagal dimuat" in c for c in catatan)

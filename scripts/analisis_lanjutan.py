@@ -168,6 +168,49 @@ def event_study(harga, sent, ambang: float) -> dict:
     return hasil
 
 
+MIN_HARI_GRANGER = 40
+
+
+def granger(harga, sent, mulai: date, lag_maks: int = 2) -> dict:
+    """Uji kausalitas Granger per emiten, dua arah, pada hari bursa sejak `mulai`.
+
+    Hari bursa tanpa berita diisi skor 0 (tidak ada sentimen) — uji Granger
+    butuh deret berjarak tetap. Karena puluhan emiten diuji sekaligus, ambang
+    signifikansi dikoreksi Bonferroni: tanpa koreksi, sekitar 5% emiten akan
+    tampak "signifikan" hanya karena kebetulan.
+    """
+    import warnings
+
+    from statsmodels.tsa.stattools import grangercausalitytests
+
+    # deret dimulai dari hari sentimen pertama: sebelum pengumpulan berita
+    # dimulai datanya belum ada, bukan "tidak ada berita", jadi tidak boleh diisi 0
+    if not sent.empty:
+        mulai = max(mulai, sent["tanggal"].min())
+    h = harga[harga["tanggal"] >= mulai]
+    s = sent.set_index(["kode", "tanggal"])["skor"] if not sent.empty else None
+    hasil = {"diuji": 0, "hari": 0, "mulai": mulai, "sentimen_ke_return": [], "return_ke_sentimen": []}
+    for kode, g in h.groupby("kode"):
+        g = g.sort_values("tanggal")
+        hasil["hari"] = max(hasil["hari"], len(g))
+        if len(g) < MIN_HARI_GRANGER or s is None:
+            continue
+        skor = [float(s.get((kode, t), 0.0)) for t in g["tanggal"]]
+        if sum(1 for v in skor if v != 0) < 10:
+            continue  # terlalu sedikit hari berberita untuk diuji
+        import pandas as pd
+
+        d = pd.DataFrame({"r": g["r"].to_numpy(), "skor": skor})
+        hasil["diuji"] += 1
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            p1 = min(v[0]["ssr_ftest"][1] for v in grangercausalitytests(d[["r", "skor"]], lag_maks).values())
+            p2 = min(v[0]["ssr_ftest"][1] for v in grangercausalitytests(d[["skor", "r"]], lag_maks).values())
+        hasil["sentimen_ke_return"].append((kode, p1))
+        hasil["return_ke_sentimen"].append((kode, p2))
+    return hasil
+
+
 def persen(v: float) -> str:
     return "—" if v is None or (isinstance(v, float) and math.isnan(v)) else f"{v * 100:+.2f}%"
 
@@ -217,6 +260,21 @@ def main() -> None:
             for kel, jendela in ev["kelompok"].items():
                 for nama, (n, rerata, t, pv) in jendela.items():
                     bagian.append(f"| {kel} | {nama} | {n} | {persen(rerata)} | {angka(t, 2)} | {angka(pv)} |\n")
+
+            gr = granger(harga, sent, a.mulai)
+            bagian.append("\n### Uji kausalitas Granger per emiten (lag 1–2 hari bursa)\n\n")
+            if gr["diuji"] == 0:
+                bagian.append(f"Belum dapat dijalankan: deret terpanjang baru {gr['hari']} hari bursa sejak "
+                              f"{gr['mulai']} (hari sentimen pertama), butuh minimal {MIN_HARI_GRANGER}. Jalankan ulang saat data bertambah.\n")
+            else:
+                alfa = 0.05 / gr["diuji"]
+                for arah, judul_arah in (("sentimen_ke_return", "sentimen → return"),
+                                         ("return_ke_sentimen", "return → sentimen")):
+                    lolos = sorted((k for k, pv in gr[arah] if pv < alfa))
+                    bagian.append(f"- {judul_arah}: {len(lolos)} dari {gr['diuji']} emiten signifikan pada "
+                                  f"α Bonferroni {alfa:.4f}" + (f" ({', '.join(lolos)})" if lolos else "") + "\n")
+                bagian.append("\nGranger hanya menguji apakah nilai lampau satu deret membantu menjelaskan "
+                              "deret lain — bukan sebab-akibat dalam arti sebenarnya.\n")
 
     bagian.append("\n## Cara membaca\n\n- p < 0,05 berarti hubungan itu kecil kemungkinannya muncul "
                   "kebetulan; p di atas itu berarti data belum cukup untuk menyimpulkan apa pun — bukan "
