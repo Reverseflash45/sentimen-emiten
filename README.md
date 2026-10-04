@@ -43,7 +43,7 @@ python -m scripts.periksa_pemetaan --acak   # periksa presisi pemetaan manual
 python -m scripts.bersihkan_pemetaan --lihat  # buang pemetaan lama bila aturan berubah
 python -m scripts.verifikasi --csv data/keterbukaan/contoh.csv
 python -m scripts.buat_pengguna anda@contoh.id "Nama Anda" --peran analis
-pytest -q                       # 205 uji
+pytest -q                       # 226 uji
 ```
 
 Menjalankan API dan dasbor:
@@ -123,6 +123,7 @@ app/
     matcher.py         pemetaan berita ke emiten (SRS 10.1 butir 2)
     pipeline.py        siklus pengumpulan
     pengaya.py         pengayaan pemetaan dari badan artikel
+    penolakan.py       mencabut pemetaan yang dinyatakan tidak relevan (UC-05 4a)
     diagnosa.py        memisahkan gagal-cocok dari di-luar-cakupan
   harga/
     provider.py        sumber harga: CSV dan yfinance
@@ -133,6 +134,7 @@ app/
   klasifikasi/
     basis.py           antarmuka Pengklasifikasi — titik tukar model
     leksikon.py        baseline leksikon finansial Indonesia
+    klasik.py          pembanding TF-IDF + Naive Bayes / SVM (SRS 10.2)
     jalankan.py        pelabelan berita per pasangan berita-emiten
   auth/
     keamanan.py        hash kata sandi (PBKDF2) dan token sesi ber-HMAC
@@ -155,7 +157,7 @@ app/
 data/lq45.py           daftar emiten & portal berita
 scripts/               perintah baris perintah
 siklus.bat             pembungkus untuk Task Scheduler Windows
-tests/                 205 uji, semuanya tanpa jaringan
+tests/                 226 uji, semuanya tanpa jaringan
 ```
 
 ## Endpoint
@@ -173,6 +175,7 @@ tests/                 205 uji, semuanya tanpa jaringan
 | GET | `/api/berita` | daftar berita, saring per emiten/sentimen/status |
 | POST | `/api/berita/{id}/koreksi` | koreksi label oleh analis (UC-05) |
 | POST | `/api/berita/{id}/verifikasi` | tandai terkonfirmasi resmi / rumor (UC-04) |
+| POST | `/api/berita/{id}/tidak-relevan` | cabut pemetaan berita ke emiten yang salah (UC-05 4a) |
 | GET | `/api/emiten/{kode}/keterbukaan` | pengumuman resmi BEI yang tersimpan |
 | GET | `/api/berita/{id}/jejak` | dasar pemberian status verifikasi |
 | GET | `/api/sumber` | daftar portal beserta kredibilitasnya |
@@ -184,7 +187,7 @@ tests/                 205 uji, semuanya tanpa jaringan
 | GET | `/api/analis/antrean` | label model yang belum ditinjau, paling ragu dulu (`?kode=`, `?urut=`) |
 | GET | `/api/analis/statistik` | kesepakatan model–analis dan matriksnya, status verifikasi |
 
-Endpoint `POST /api/berita/{id}/koreksi`, `/verifikasi`, dan `/api/analis/*`
+Endpoint `POST /api/berita/{id}/koreksi`, `/verifikasi`, `/tidak-relevan`, dan `/api/analis/*`
 menuntut peran **analis**; watchlist menuntut akun apa pun; sisanya bisa
 dibaca tanpa masuk.
 
@@ -193,8 +196,9 @@ Dasbor menyesuaikan tampilannya dengan peran yang masuk:
 - **Tamu** — ringkasan, pencarian emiten, grafik, peringkat, berita.
 - **Pengguna** — ditambah watchlist berbentuk kartu dan tombol ☆ Pantau di
   panel detail emiten.
-- **Analis** — ditambah ruang kerja: antrean tinjauan label (setujui atau
-  koreksi dengan satu klik), antrean verifikasi berita, serta statistik
+- **Analis** — ditambah ruang kerja: antrean tinjauan label (setujui,
+  koreksi, atau nyatakan tidak relevan dengan satu klik), antrean verifikasi
+  berita, serta statistik
   kesepakatan model–analis. Karena analis melihat label model saat meninjau,
   koreksi ini dipakai untuk melatih ulang model tetapi **tidak** untuk
   mengujinya (lihat bagian IndoBERT).
@@ -497,7 +501,7 @@ dikumpulkan setelah perbaikan.
 ## Menjalankan otomatis tiap hari
 
 Cara utama sekarang adalah **GitHub Actions** (`.github/workflows/siklus-harian.yml`):
-berita dikumpulkan dua kali sehari (07.30 dan 19.30 WIB) dan harga penutupan
+berita dikumpulkan tiap 4 jam (07.30, 11.30, 15.30, 19.30, 23.30, 03.30 WIB) dan harga penutupan
 diunduh tiap hari bursa pukul 18.00 WIB, langsung ke basis data yang dipakai
 situs. CSV harga yang baru ikut disimpan kembali ke repo sebagai data
 penelitian. Rahasia `DATABASE_URL` dan `USER_AGENT` diisi di
@@ -506,6 +510,10 @@ penelitian. Rahasia `DATABASE_URL` dan `USER_AGENT` diisi di
 
 Keuntungannya dibanding penjadwal di laptop: tetap berjalan walau laptop mati
 — penting karena berita yang terlewat hilang permanen (lihat di bawah).
+
+Jadwal GitHub sering molor beberapa jam dari waktu yang tertulis. Itu tidak
+menghilangkan data selama jarak antar-siklus masih lebih pendek dari umur
+berita di RSS, dan itulah alasan jaraknya 4 jam, bukan 12.
 
 Alternatif lokal dengan Task Scheduler Windows:
 
@@ -563,10 +571,19 @@ Karena itu alurnya dimulai dari label manual (label emas):
 python -m scripts.label_manual          # 1. anotasi: satu tombol per berita-emiten
 pip install "torch>=2.6" --index-url https://download.pytorch.org/whl/cu124
 pip install -r requirements-ml.txt      # 2. pustaka pelatihan (GPU NVIDIA)
-python -m scripts.latih_indobert        # 3. fine-tuning indobenchmark/indobert-base-p1
-python -m scripts.evaluasi_model        # 4. bandingkan dengan leksikon pada data uji
-python -m scripts.klasifikasi --model indobert --ulangi   # 5. labeli seluruh berita
+python -m scripts.latih_klasik          # 3. pembanding TF-IDF + Naive Bayes & SVM (tanpa GPU)
+python -m scripts.latih_indobert        # 4. fine-tuning indobenchmark/indobert-base-p1
+python -m scripts.evaluasi_model        # 5. bandingkan semuanya pada data uji
+python -m scripts.klasifikasi --model indobert --ulangi   # 6. labeli seluruh berita
 ```
+
+Tabel hasil `evaluasi_model` menyusun empat tingkat pendekatan berurutan:
+mayoritas (tanpa model) → leksikon (aturan, tanpa belajar) → TF-IDF + NB/SVM
+(belajar dari data, kata lepas tanpa konteks) → IndoBERT (belajar dari data,
+membaca konteks). Selisih antar-tingkat menunjukkan dari mana peningkatan
+datang. Model klasik membaca masukan yang sama persis dengan IndoBERT — teks
+berita plus segmen emiten — supaya selisihnya mencerminkan metode, bukan
+banyaknya informasi yang diberikan.
 
 Keputusan yang perlu disebut di laporan:
 
@@ -583,12 +600,20 @@ Keputusan yang perlu disebut di laporan:
   emas tidak bias ke arah model yang sedang diuji.
 - Evaluasi melaporkan akurasi, macro-F1, F1 per kelas, matriks kebingungan,
   pembanding tebakan kelas mayoritas, dan selang kepercayaan 95% (bootstrap
-  berpasangan) untuk selisih macro-F1 IndoBERT − leksikon.
+  berpasangan) untuk selisih macro-F1 tiap model terhadap leksikon dan
+  IndoBERT terhadap tiap model klasik.
+- **Hiperparameter model klasik** (alpha NB, C SVM) dipilih pada data
+  validasi dari kisi yang tetap, dan seluruh percobaannya ikut tersimpan di
+  `model/klasik-*.json` — bukan hanya yang terbaik.
 
 Label manual disimpan sebagai `asal=ANALIS, versi_model="anotasi"`; karena
 label analis selalu diutamakan, anotasi sekaligus memperbaiki angka di dasbor.
-Pasangan yang ternyata salah petakan dicatat di `data/anotasi/tidak_relevan.csv`
-— bahan untuk mengukur dan memperbaiki presisi pemetaan emiten.
+Pasangan yang ternyata salah petakan — lewat tombol `x` di `label_manual` atau
+tombol *Tidak relevan* di dasbor analis — dicabut dari `berita_emiten` dan
+dipindah ke tabel `pemetaan_ditolak` beserta kutipan buktinya. Berita itu tidak
+lagi menggeser skor emiten tersebut, dan pengaya tidak membuat ulang kaitannya.
+Tabel itu sekaligus bahan untuk mengukur dan memperbaiki presisi pemetaan.
+Tabel baru ini dibuat oleh `python -m scripts.init_db` (aman dijalankan ulang).
 
 ## Temuan yang harus masuk laporan: dominasi artikel rekap
 

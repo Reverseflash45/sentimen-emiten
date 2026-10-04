@@ -12,8 +12,11 @@ name: Siklus harian
 
 on:
   schedule:
-    - cron: "30 0 * * *"    # 07.30 WIB — berita semalam
-    - cron: "30 12 * * *"   # 19.30 WIB — berita siang hari
+    # berita tiap 4 jam: 07.30, 11.30, 15.30, 19.30, 23.30, 03.30 WIB.
+    # Dua kali sehari tidak cukup — RSS portal yang ramai sudah menggeser
+    # berita pagi sebelum sore tiba, dan berita yang terlewat hilang permanen.
+    # Jadwal GitHub sering molor beberapa jam; jarak 4 jam memberi cadangan.
+    - cron: "30 0,4,8,12,16,20 * * *"
     - cron: "0 11 * * 1-5"  # 18.00 WIB, hari bursa — harga penutupan
   workflow_dispatch:
     inputs:

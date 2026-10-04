@@ -355,3 +355,25 @@ def test_kalimat_sebelum_sisipan_tetap_utuh():
     teks = ekstrak_teks(html)
     assert "laba bersih yang tumbuh dua digit" in teks
     assert "tidak relevan" not in teks
+
+
+def test_kaitan_yang_ditolak_tidak_dibuat_ulang(db, robots_izinkan):
+    # berita yang dipetakan dari judul tidak punya catatan pengayaan; begitu
+    # kaitannya ditolak, pengaya akan mengambil halamannya — dan tanpa
+    # pemeriksaan tolakan, kaitan yang sama langsung terpasang lagi
+    from app.ingest.penolakan import tolak_pemetaan
+    from app.models import PemetaanDitolak
+
+    b = _berita(db, "Daftar Lengkap 8 Blok Migas Dilelang", "http://uji.test/tolak")
+    db.add(BeritaEmiten(berita_id=b.id, emiten_id=1, cara_cocok="nama", kutipan="Medco Energi"))
+    db.commit()
+    assert tolak_pemetaan(db, b.id, 1)
+    db.commit()
+
+    with _klien() as klien:
+        hasil = perkaya_pemetaan(db, klien=klien, jeda=False, ulangi=True)
+
+    assert hasil.terpetakan == 0
+    assert list(db.scalars(select(BeritaEmiten).where(BeritaEmiten.berita_id == b.id))) == []
+    tolakan = db.scalar(select(PemetaanDitolak))
+    assert (tolakan.berita_id, tolakan.emiten_id, tolakan.kutipan) == (b.id, 1, "Medco Energi")

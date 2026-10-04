@@ -539,3 +539,34 @@ def test_statistik_menghitung_setuju_dan_koreksi(klien, analis):
     assert (s["sudah_ditinjau"], s["tersisa"], s["setuju"], s["dikoreksi"]) == (2, 8, 1, 1)
     assert s["matriks"][koreksi["label_model"]["sentimen"]]["netral"] == 1
     assert s["verifikasi"]["belum_diperiksa"] == 10
+
+
+def test_tidak_relevan_mencabut_kaitan_dari_antrean_berita_dan_skor(klien, analis):
+    # UC-05 4a: berita salah petakan keluar tanpa menyimpan label apa pun
+    sebelum = klien.get("/api/emiten/BBCA/sentimen", params=RENTANG).json()["titik"]
+    id_berita = klien.get("/api/analis/antrean", headers=analis).json()["item"][0]["berita_id"]
+
+    r = klien.post(f"/api/berita/{id_berita}/tidak-relevan",
+                   json={"kode_emiten": "BBCA"}, headers=analis)
+    assert r.status_code == 200
+
+    antrean = klien.get("/api/analis/antrean", headers=analis).json()
+    assert antrean["total"] == 9
+    assert id_berita not in [b["id"] for b in klien.get("/api/berita", params={"kode": "BBCA"}).json()]
+    sesudah = klien.get("/api/emiten/BBCA/sentimen", params=RENTANG).json()["titik"]
+    assert sum(t["jumlah_berita"] for t in sesudah) == sum(t["jumlah_berita"] for t in sebelum) - 1
+    s = klien.get("/api/analis/statistik", headers=analis).json()
+    assert (s["pasangan_berlabel_model"], s["sudah_ditinjau"]) == (9, 0)
+
+    # menolak dua kali: kaitannya sudah tidak ada
+    ulang = klien.post(f"/api/berita/{id_berita}/tidak-relevan",
+                       json={"kode_emiten": "BBCA"}, headers=analis)
+    assert ulang.status_code == 400
+
+
+def test_tidak_relevan_hanya_untuk_analis(klien, biasa):
+    id_berita = klien.get("/api/berita", params={"kode": "BBCA", "limit": 1}).json()[0]["id"]
+    assert klien.post(f"/api/berita/{id_berita}/tidak-relevan",
+                      json={"kode_emiten": "BBCA"}).status_code == 401
+    assert klien.post(f"/api/berita/{id_berita}/tidak-relevan",
+                      json={"kode_emiten": "BBCA"}, headers=biasa).status_code == 403

@@ -4,6 +4,7 @@
     python -m scripts.klasifikasi --ulangi       # label ulang seluruh berita
     python -m scripts.klasifikasi --batas 100
     python -m scripts.klasifikasi --model indobert --ulangi   # labeli dengan IndoBERT
+    python -m scripts.klasifikasi --model svm --ulangi        # atau dengan TF-IDF + SVM / NB
 
 Label versi lama tidak dihapus: label IndoBERT disimpan berdampingan dengan
 label leksikon, dan dasbor memakai label model yang terbaru.
@@ -22,12 +23,15 @@ def main() -> None:
     p = argparse.ArgumentParser(description="Pelabelan sentimen berita")
     p.add_argument("--batas", type=int, default=None, help="jumlah berita maksimum")
     p.add_argument("--ulangi", action="store_true", help="proses ulang berita yang sudah dilabeli")
-    p.add_argument("--model", choices=["leksikon", "indobert"], default="leksikon")
+    p.add_argument("--model", choices=["leksikon", "nb", "svm", "indobert"], default="leksikon")
     argumen = p.parse_args()
 
     if argumen.model == "indobert":
         from app.klasifikasi.indobert import PengklasifikasiIndoBERT
         model = PengklasifikasiIndoBERT()
+    elif argumen.model in ("nb", "svm"):
+        from app.klasifikasi.klasik import PengklasifikasiKlasik
+        model = PengklasifikasiKlasik(argumen.model)
     else:
         model = PengklasifikasiLeksikon()
     with SessionLocal() as session:

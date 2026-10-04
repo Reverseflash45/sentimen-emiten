@@ -33,6 +33,7 @@ from app.config import settings
 from app.ingest import robots
 from app.ingest.cleaner import bersihkan
 from app.ingest.matcher import cocokkan
+from app.ingest.penolakan import pasangan_ditolak
 from app.models import Berita, BeritaEmiten, Emiten, PengayaanBerita
 
 # tag yang isinya bukan artikel
@@ -273,6 +274,10 @@ def perkaya_pemetaan(
     for e in session.scalars(select(Emiten).where(Emiten.aktif.is_(True))):
         daftar_emiten[e.kode] = [e.nama, *e.daftar_alias()]
     peta_id = {e.kode: e.id for e in session.scalars(select(Emiten))}
+    # kaitan yang sudah ditolak manusia tidak boleh dibuat ulang; tanpa ini
+    # berita yang tadinya dipetakan dari judul akan diambil halamannya begitu
+    # kaitannya ditolak, lalu terpetakan lagi ke emiten yang sama
+    ditolak = pasangan_ditolak(session)
 
     sudah_terpetakan = select(BeritaEmiten.berita_id)
     kueri = select(Berita).where(Berita.id.not_in(sudah_terpetakan))
@@ -317,7 +322,10 @@ def perkaya_pemetaan(
         hasil.diambil += 1
         teks = ekstrak_teks(html)
         # judul tetap disertakan: kadang nama emiten hanya ada di judul versi web
-        kecocokan = cocokkan(f"{berita.judul}. {teks}", daftar_emiten)
+        kecocokan = [
+            k for k in cocokkan(f"{berita.judul}. {teks}", daftar_emiten)
+            if (berita.id, peta_id.get(k.kode)) not in ditolak
+        ]
         if not kecocokan:
             catat(f"{awalan} kosong {potong_judul}")
             catat_pengayaan(session, berita.id, 0, berhasil=True)

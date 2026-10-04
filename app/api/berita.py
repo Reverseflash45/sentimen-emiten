@@ -12,6 +12,7 @@ from app.analitik.agregasi import _label_terpilih
 from app.api.bantu import ambil_emiten
 from app.auth.dependensi import wajib_analis
 from app.database import get_session
+from app.ingest.penolakan import tolak_pemetaan
 from app.models import (
     AsalLabel,
     Pengguna,
@@ -31,6 +32,7 @@ from app.schemas import (
     KoreksiLabel,
     LabelRingkas,
     PengumumanRingkas,
+    TolakPemetaan,
     UbahVerifikasi,
 )
 
@@ -202,6 +204,28 @@ def koreksi_label(
         )
     session.commit()
     return _rakit(session, berita, sumber, emiten)
+
+
+@router.post("/{berita_id}/tidak-relevan")
+def tandai_tidak_relevan(
+    berita_id: int,
+    badan: TolakPemetaan,
+    analis: Pengguna = Depends(wajib_analis),
+    session: Session = Depends(get_session),
+) -> dict:
+    """Mengeluarkan pasangan berita-emiten yang salah petakan (SRS UC-05 4a).
+
+    Tidak menyimpan label sentimen apa pun: berita yang tidak membahas emiten
+    itu tidak punya sentimen terhadapnya. Kaitannya dicabut dari skor, daftar
+    berita, dan antrean; buktinya disimpan di tabel pemetaan_ditolak.
+    """
+    if session.get(Berita, berita_id) is None:
+        raise HTTPException(404, "berita tidak ditemukan")
+    emiten = ambil_emiten(session, badan.kode_emiten)
+    if not tolak_pemetaan(session, berita_id, emiten.id, analis.id):
+        raise HTTPException(400, f"berita ini tidak terkait emiten {emiten.kode}")
+    session.commit()
+    return {"berita_id": berita_id, "kode": emiten.kode, "status": "ditolak"}
 
 
 @router.post("/{berita_id}/verifikasi", response_model=BeritaRingkas)

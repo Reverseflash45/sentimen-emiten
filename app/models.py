@@ -151,6 +151,30 @@ class BeritaEmiten(Base):
     emiten: Mapped[Emiten] = relationship(back_populates="berita_terkait")
 
 
+class PemetaanDitolak(Base):
+    """Pemetaan berita-emiten yang dinyatakan tidak relevan oleh manusia
+    (SRS UC-05 alur alternatif 4a).
+
+    Baris BeritaEmiten-nya dihapus supaya berita itu tidak lagi ikut
+    menggeser skor sentimen emiten tersebut. Bukti pencocokannya dipindah ke
+    sini — bukan dibuang — karena justru catatan ini yang dipakai mengukur
+    presisi pemetaan, dan pengaya membacanya agar tidak membuat ulang kaitan
+    yang sudah ditolak.
+    """
+
+    __tablename__ = "pemetaan_ditolak"
+    __table_args__ = (UniqueConstraint("berita_id", "emiten_id", name="uq_pemetaan_ditolak"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    berita_id: Mapped[int] = mapped_column(ForeignKey("berita.id"), index=True)
+    emiten_id: Mapped[int] = mapped_column(ForeignKey("emiten.id"), index=True)
+    cara_cocok: Mapped[str | None] = mapped_column(String(16), default=None)
+    kutipan: Mapped[str | None] = mapped_column(Text, default=None)
+    # None bila ditolak lewat scripts.label_manual (tanpa akun)
+    pengguna_id: Mapped[int | None] = mapped_column(ForeignKey("pengguna.id"), default=None)
+    dibuat_pada: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+
 class LabelSentimen(Base):
     """Label sentimen untuk pasangan berita-emiten."""
 

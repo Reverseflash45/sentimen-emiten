@@ -35,6 +35,7 @@ from pathlib import Path
 from sqlalchemy import select
 
 from app.database import SessionLocal
+from app.ingest.penolakan import tolak_pemetaan
 from app.klasifikasi.dataset import VERSI_ANOTASI
 from app.models import AsalLabel, Berita, BeritaEmiten, Emiten, LabelSentimen, Sentimen, SumberBerita
 
@@ -166,7 +167,11 @@ def main() -> None:
                 continue
             if t == "x":
                 catat_tidak_relevan(berita.id, emiten.id, emiten.kode)
-                print(_w("35", "  ✕ dicatat tidak relevan"))
+                # sama seperti tombol "Tidak relevan" di dasbor: kaitannya
+                # dicabut supaya tidak ikut menggeser skor emiten ini
+                tolak_pemetaan(s, berita.id, emiten.id)
+                s.commit()
+                print(_w("35", "  ✕ dicatat tidak relevan, kaitannya dicabut"))
                 i += 1
                 continue
             sentimen = {"1": Sentimen.POSITIF, "2": Sentimen.NETRAL, "3": Sentimen.NEGATIF}.get(t)

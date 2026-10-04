@@ -625,6 +625,18 @@ async function muatBerita() {
         };
         aksi.append(tombol);
       }
+      const tolak = el("button", { title: "Berita ini tidak membahas emiten tersebut" }, `Tidak relevan untuk ${state.kode}`);
+      tolak.onclick = async () => {
+        tolak.disabled = true;
+        try {
+          await tolakPemetaan(b.id, state.kode);
+          await muatEmiten(); // skor, korelasi, dan daftar berita ikut berubah
+        } catch (e) {
+          toast(e.message, "gagal");
+          tolak.disabled = false;
+        }
+      };
+      aksi.append(tolak);
     }
     const { lihat, jejak } = tombolJejak(b.id);
     aksi.append(lihat);
@@ -903,6 +915,15 @@ async function ubahPantau(kode, pantau) {
 
 /* ---------- ruang kerja analis ---------- */
 
+/* UC-05 4a: berita yang salah petakan dikeluarkan tanpa label. Skor emiten
+   ikut berubah, jadi statistik dan peringkat dimuat ulang. */
+async function tolakPemetaan(beritaId, kode) {
+  await kirimJson(`/api/berita/${beritaId}/tidak-relevan`, { kode_emiten: kode });
+  toast(`Kaitan ${kode} dicabut dari berita ini`);
+  muatStatistikAnalis();
+  muatPeringkat();
+}
+
 function muatRuangAnalis() {
   state.analis.offset = 0;
   muatStatistikAnalis();
@@ -994,6 +1015,21 @@ function kartuTinjau(it) {
     b.onclick = () => putus(sentimen);
     return b;
   };
+  const tolak = el("button", { class: "tolak", title: "Berita ini tidak membahas emiten tersebut — kaitannya dicabut tanpa menyimpan label" },
+    `Tidak relevan untuk ${it.kode}`);
+  tolak.onclick = async () => {
+    for (const b of kartu.querySelectorAll("button")) b.disabled = true;
+    try {
+      await tolakPemetaan(it.berita_id, it.kode);
+      kartu.classList.add("keluar");
+      setTimeout(() => kartu.remove(), 260);
+      state.analis.offset = Math.max(0, state.analis.offset - 1);
+      if ($("#antrean").children.length <= 3) muatAntrean(true);
+    } catch (e) {
+      toast(e.message, "gagal");
+      for (const b of kartu.querySelectorAll("button")) b.disabled = false;
+    }
+  };
   const kutip = (it.kutipan || "").replace(/…/g, "").trim();
   kartu.append(
     el("div", { class: "isi" }, [
@@ -1009,6 +1045,7 @@ function kartuTinjau(it) {
       tombol("Positif", "p", "positif"),
       tombol("Netral", "n", "netral"),
       tombol("Negatif", "g", "negatif"),
+      tolak,
     ]),
   );
   return kartu;

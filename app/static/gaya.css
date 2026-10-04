@@ -438,6 +438,8 @@ table.peringkat .opsional { display: none; }
 .putusan .p:hover { border-color: var(--positif); color: var(--positif); }
 .putusan .n:hover { border-color: var(--teks); }
 .putusan .g:hover { border-color: var(--negatif); color: var(--negatif); }
+.putusan .tolak { grid-column: 1 / -1; background: transparent; border-style: dashed; color: var(--redup); font-weight: 500; }
+.putusan .tolak:hover { color: var(--teks); border-color: var(--teks); }
 .putusan.verif { grid-template-columns: 1fr 1fr; }
 .putusan.verif .jejak-tombol { grid-column: 1 / -1; }
 .muat-lagi { display: block; margin: 8px auto 0; }

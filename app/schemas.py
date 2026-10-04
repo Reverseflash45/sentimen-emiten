@@ -118,6 +118,12 @@ class UbahVerifikasi(BaseModel):
     status: StatusVerifikasi
 
 
+class TolakPemetaan(BaseModel):
+    """Analis menyatakan berita ini tidak membahas emiten tersebut (UC-05 4a)."""
+
+    kode_emiten: str
+
+
 class Ringkasan(BaseModel):
     jumlah_emiten: int
     jumlah_sumber: int

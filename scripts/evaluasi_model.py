@@ -3,15 +3,22 @@
     python -m scripts.evaluasi_model
     python -m scripts.evaluasi_model --tanpa-indobert   # hanya leksikon (sebelum model dilatih)
 
-Yang dibandingkan:
+Yang dibandingkan (SRS 10.2):
   - mayoritas : selalu menebak kelas terbanyak di data latih. Model yang tidak
                 mengalahkan ini tidak belajar apa pun.
-  - leksikon  : baseline saat ini (leksikon-v1).
-  - indobert  : hasil scripts/latih_indobert.py.
+  - leksikon  : baseline saat ini (leksikon-v1) — aturan, tanpa belajar.
+  - nb / svm  : TF-IDF + Naive Bayes / SVM, hasil scripts/latih_klasik.py —
+                belajar dari data, tapi membaca kata lepas tanpa konteks.
+  - indobert  : hasil scripts/latih_indobert.py — belajar dari data dan
+                membaca kata dalam konteksnya.
+Model yang belum dilatih dilewati dengan pemberitahuan, bukan galat.
 
-Selisih macro-F1 IndoBERT vs leksikon dilengkapi selang kepercayaan 95% dari
-bootstrap berpasangan: dengan data uji yang kecil, selisih beberapa poin bisa
-saja kebetulan, dan selang ini menunjukkan seberapa yakin selisih itu nyata.
+Setiap selisih macro-F1 dilengkapi selang kepercayaan 95% dari bootstrap
+berpasangan: dengan data uji yang kecil, selisih beberapa poin bisa saja
+kebetulan, dan selang ini menunjukkan seberapa yakin selisih itu nyata.
+Perbandingan yang dilaporkan: tiap model terhadap leksikon, dan IndoBERT
+terhadap tiap model klasik — yang terakhir inilah ukuran sumbangan pemahaman
+konteks.
 
 Data uji hanya memakai label "buta" dari scripts.label_manual. Koreksi yang
 dibuat di dasbor ikut melatih model, tetapi tidak dipakai untuk menilainya.
@@ -30,6 +37,7 @@ from pathlib import Path
 from app.database import SessionLocal
 from app.klasifikasi import PengklasifikasiLeksikon
 from app.klasifikasi.dataset import KELAS, muat_label_emas
+from app.klasifikasi.klasik import JENIS, VERSI, PengklasifikasiKlasik, lokasi_model
 
 LAPORAN = Path("data/anotasi/laporan_evaluasi.md")
 
@@ -103,21 +111,41 @@ def main() -> None:
     mayoritas = Counter(c.sentimen.value for c in latih).most_common(1)[0][0] if latih else "netral"
     hasil = {"mayoritas": metrik(benar, [mayoritas] * len(uji))}
 
+    pasangan_uji = [(c.teks, c.target) for c in uji]
     leks = PengklasifikasiLeksikon()
-    tebak_leks = [leks.prediksi(c.teks).sentimen.value for c in uji]
-    hasil[leks.versi] = metrik(benar, tebak_leks)
+    tebakan = {leks.versi: [leks.prediksi(c.teks).sentimen.value for c in uji]}
 
-    catatan_selisih = ""
+    for jenis in JENIS:
+        if not lokasi_model(jenis).exists():
+            print(f"({VERSI[jenis]} dilewati — belum dilatih: python -m scripts.latih_klasik)")
+            continue
+        m = PengklasifikasiKlasik(jenis)
+        tebakan[m.versi] = [pr.sentimen.value for pr in m.prediksi_emiten_banyak(pasangan_uji)]
+
+    versi_ib = None
     if not a.tanpa_indobert:
         from app.klasifikasi.indobert import PengklasifikasiIndoBERT
         ib = PengklasifikasiIndoBERT(a.model)
-        tebak_ib = [pr.sentimen.value for pr in ib.prediksi_emiten_banyak([(c.teks, c.target) for c in uji])]
-        hasil[ib.versi] = metrik(benar, tebak_ib)
-        lo, hi = selang_selisih(benar, tebak_ib, tebak_leks)
-        beda = hasil[ib.versi]["macro_f1"] - hasil[leks.versi]["macro_f1"]
-        yakin = "nyata (selang tidak memuat 0)" if lo > 0 or hi < 0 else "belum bisa dipastikan (selang memuat 0)"
-        catatan_selisih = (f"\nSelisih macro-F1 {ib.versi} − {leks.versi}: **{beda:+.3f}**, "
-                           f"selang kepercayaan 95% [{lo:+.3f}, {hi:+.3f}] — {yakin}.\n")
+        versi_ib = ib.versi
+        tebakan[ib.versi] = [pr.sentimen.value for pr in ib.prediksi_emiten_banyak(pasangan_uji)]
+
+    for nama, tebak in tebakan.items():
+        hasil[nama] = metrik(benar, tebak)
+
+    # tiap model terhadap leksikon, lalu IndoBERT terhadap tiap model klasik
+    banding = [(n, leks.versi) for n in tebakan if n != leks.versi]
+    if versi_ib:
+        banding += [(versi_ib, VERSI[j]) for j in JENIS if VERSI[j] in tebakan]
+    catatan_selisih = ""
+    if banding:
+        catatan_selisih = ("\n## Selisih macro-F1\n\nSelang kepercayaan 95% dari bootstrap berpasangan "
+                           "(2.000 ulangan).\n\n| Perbandingan | Selisih | Selang 95% | Kesimpulan |\n"
+                           "|---|---|---|---|\n")
+        for x, y in banding:
+            lo, hi = selang_selisih(benar, tebakan[x], tebakan[y])
+            beda = hasil[x]["macro_f1"] - hasil[y]["macro_f1"]
+            yakin = "nyata" if lo > 0 or hi < 0 else "belum pasti (selang memuat 0)"
+            catatan_selisih += f"| {x} − {y} | **{beda:+.3f}** | [{lo:+.3f}, {hi:+.3f}] | {yakin} |\n"
 
     sebaran = Counter(benar)
     isi = (
