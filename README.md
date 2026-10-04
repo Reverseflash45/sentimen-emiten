@@ -501,8 +501,11 @@ sama.
 
 ## Yang belum dikerjakan
 
-- Melatih IndoBERT — infrastrukturnya sudah ada (lihat "IndoBERT" di bawah),
-  menunggu label manual yang cukup
+- Label manusia untuk data uji (287 pasangan per 4 Oktober 2026):
+  `python -m scripts.label_manual --hanya-uji`. NB, SVM, IndoBERT, dan ablasinya
+  sudah dilatih dengan label perak LLM; angka akhir menunggu data uji ini
+- Menjadikan IndoBERT label produksi dasbor — perlu inferensi terjadwal di
+  mesin yang punya model (GitHub Actions saat ini hanya menjalankan leksikon)
 - Notifikasi lewat email (notifikasi di dalam aplikasi sudah ada)
 - Verifikasi daftar LQ45 terhadap pengumuman resmi BEI terbaru
 
