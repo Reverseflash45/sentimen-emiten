@@ -26,6 +26,23 @@ nama (lihat matcher), jadi "BCA" dan "BRI" di bawah hanya berfungsi sebagai
 catatan, bukan pola pencocokan.
 """
 
+from datetime import date
+
+#: periode efektif komposisi di bawah (mulai, akhir). Saat periode berakhir,
+#: halaman Admin dan log siklus harian menampilkan peringatan — daftar yang
+#: kedaluwarsa tidak menimbulkan galat apa pun, jadi harus diingatkan.
+PERIODE_LQ45: tuple[date, date] = (date(2026, 8, 3), date(2026, 10, 30))
+PERINGATAN_HARI = 14
+
+
+def status_periode(hari_ini: date | None = None) -> dict:
+    """Status masa berlaku daftar LQ45 untuk ditampilkan dan dicatat."""
+    hari_ini = hari_ini or date.today()
+    mulai, akhir = PERIODE_LQ45
+    sisa = (akhir - hari_ini).days
+    status = "kedaluwarsa" if sisa < 0 else "segera_berakhir" if sisa <= PERINGATAN_HARI else "berlaku"
+    return {"mulai": mulai.isoformat(), "akhir": akhir.isoformat(), "sisa_hari": sisa, "status": status}
+
 EMITEN_AWAL: list[tuple[str, str, str, str]] = [
     # --- Keuangan ---
     ("BBCA", "Bank Central Asia Tbk", "Keuangan", "BCA|Bank BCA"),

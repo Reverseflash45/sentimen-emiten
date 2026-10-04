@@ -168,6 +168,11 @@ class PenggunaRingkas(BaseModel):
     email: str
     nama: str
     peran: Peran
+    kirim_email: bool = False
+
+
+class UbahEmailNotifikasi(BaseModel):
+    aktif: bool
 
 
 class TambahWatchlist(BaseModel):

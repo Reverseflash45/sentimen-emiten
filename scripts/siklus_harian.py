@@ -26,11 +26,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from app.analitik.notifikasi import periksa_watchlist
+from app.analitik.surel import kirim_notifikasi
 from app.database import SessionLocal
 from app.ingest.pengaya import perkaya_sampai_habis
 from app.ingest.pipeline import jalankan_siklus
 from app.klasifikasi import PengklasifikasiLeksikon
 from app.klasifikasi.jalankan import klasifikasi_berita_baru
+from data.lq45 import status_periode
 
 FOLDER_LOG = Path("data/log")
 
@@ -64,6 +66,13 @@ def main() -> None:
 
     catat = Pencatat(Path(a.log) if a.log else None)
     catat("=== siklus mulai ===")
+    periode = status_periode()
+    if periode["status"] != "berlaku":
+        # tidak menggagalkan siklus — pengumpulan tetap harus jalan — tetapi
+        # tercatat di setiap log sampai data/lq45.py diperbarui
+        kapan = "sudah lewat" if periode["sisa_hari"] < 0 else f"{periode['sisa_hari']} hari lagi"
+        catat(f"PERINGATAN : komposisi LQ45 di data/lq45.py berlaku s/d {periode['akhir']} ({kapan}). "
+              "Perbarui dari pengumuman resmi BEI.")
     gagal: list[str] = []
 
     # 1. kumpulkan berita baru
@@ -104,7 +113,9 @@ def main() -> None:
         with SessionLocal() as session:
             baru = periksa_watchlist(session)
             session.commit()
-        catat(f"notifikasi : {len(baru)} baru")
+            catat(f"notifikasi : {len(baru)} baru")
+            if baru:
+                catat(f"email      : {kirim_notifikasi(session, baru)}")
     except Exception:
         gagal.append("notifikasi")
         catat("notifikasi : GAGAL\n" + traceback.format_exc())

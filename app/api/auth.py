@@ -43,5 +43,6 @@ def masuk(badan: Masuk, session: Session = Depends(get_session)) -> Token:
 @router.get("/saya", response_model=PenggunaRingkas)
 def saya(pengguna: Pengguna = Depends(pengguna_aktif)) -> PenggunaRingkas:
     return PenggunaRingkas(
-        id=pengguna.id, email=pengguna.email, nama=pengguna.nama, peran=pengguna.peran
+        id=pengguna.id, email=pengguna.email, nama=pengguna.nama, peran=pengguna.peran,
+        kirim_email=pengguna.kirim_email,
     )

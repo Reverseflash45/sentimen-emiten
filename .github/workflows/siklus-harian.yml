@@ -7,6 +7,8 @@
 # Rahasia yang wajib diisi (Settings → Secrets and variables → Actions):
 #   DATABASE_URL  URL PostgreSQL Supabase (session pooler, port 5432)
 #   USER_AGENT    identitas crawler yang bisa dihubungi, mis. "SentimenEmitenBot/0.1 (email@contoh.com)"
+# Opsional — notifikasi email (tanpa ini hanya notifikasi di aplikasi):
+#   SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_FROM
 
 name: Siklus harian
 
@@ -40,6 +42,11 @@ jobs:
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       USER_AGENT: ${{ secrets.USER_AGENT }}
+      SMTP_HOST: ${{ secrets.SMTP_HOST }}
+      SMTP_PORT: ${{ secrets.SMTP_PORT }}
+      SMTP_USER: ${{ secrets.SMTP_USER }}
+      SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+      SMTP_FROM: ${{ secrets.SMTP_FROM }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

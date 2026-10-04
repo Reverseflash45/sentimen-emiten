@@ -1212,10 +1212,28 @@ function gambarNotifikasi() {
   }
 }
 
+async function aturEmailNotif() {
+  const kotak = $("#email-notif");
+  kotak.disabled = true;
+  try {
+    const r = await kirimJson("/api/notifikasi/email", { aktif: kotak.checked });
+    state.saya.kirim_email = r.kirim_email;
+    toast(r.kirim_email ? `Notifikasi juga dikirim ke ${state.saya.email}` : "Email notifikasi dimatikan");
+  } catch (e) {
+    kotak.checked = !kotak.checked;
+    toast(e.message, "gagal");
+  } finally {
+    kotak.disabled = false;
+  }
+}
+
 function bukaNotif(buka) {
   $("#panel-notif").hidden = !buka;
   $("#tombol-notif").setAttribute("aria-expanded", String(buka));
-  if (buka) muatNotifikasi();
+  if (buka) {
+    $("#email-notif").checked = Boolean(state.saya?.kirim_email);
+    muatNotifikasi();
+  }
 }
 
 /* ---------- admin (FR-8, UC-06) ---------- */
@@ -1429,7 +1447,25 @@ async function adminModel(wadah) {
 
 const BAGIAN_ADMIN = { sumber: adminSumber, emiten: adminEmiten, akun: adminAkun, log: adminLog, model: adminModel };
 
+/* Daftar LQ45 yang kedaluwarsa tidak menimbulkan galat apa pun — emiten yang
+   baru masuk indeks hanya tidak pernah dicocokkan. Karena itu diingatkan. */
+async function periksaPeriodeLq45() {
+  const p = $("#peringatan-periode");
+  try {
+    const s = await ambil("/api/admin/periode-lq45");
+    const akhir = fmtTgl(s.akhir, { day: "numeric", month: "long", year: "numeric" });
+    p.hidden = s.status === "berlaku";
+    p.classList.toggle("lewat", s.status === "kedaluwarsa");
+    p.textContent = s.status === "kedaluwarsa"
+      ? `Komposisi LQ45 di data/lq45.py sudah tidak berlaku sejak ${akhir}. Perbarui dari pengumuman resmi BEI, lalu jalankan scripts.init_db.`
+      : `Komposisi LQ45 di data/lq45.py berakhir ${akhir} (${s.sisa_hari} hari lagi). Siapkan daftar periode berikutnya dari pengumuman BEI.`;
+  } catch {
+    p.hidden = true;
+  }
+}
+
 async function muatAdmin() {
+  periksaPeriodeLq45();
   const bagian = state.bagianAdmin || "sumber";
   for (const b of $$("#tab-admin-isi button")) b.classList.toggle("aktif", b.dataset.bagian === bagian);
   const wadah = $("#isi-admin");
@@ -1617,6 +1653,7 @@ function pasangPintasan() {
     b.onclick = () => { state.bagianAdmin = b.dataset.bagian; muatAdmin(); };
   }
   $("#tombol-notif").onclick = (e) => { e.stopPropagation(); bukaNotif($("#panel-notif").hidden); };
+  $("#email-notif").onchange = aturEmailNotif;
   $("#baca-semua").onclick = async (e) => {
     e.stopPropagation();
     try {

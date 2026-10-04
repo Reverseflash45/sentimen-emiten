@@ -533,7 +533,8 @@ footer p { max-width: 1360px; margin: 2px auto; }
 .item-notif .arah.turun { color: var(--negatif); }
 .item-notif .waktu { display: block; color: var(--samar); font-size: 12px; margin-top: 2px; }
 .kosong-notif { margin: 0; padding: 18px 14px; color: var(--redup); font-size: 13px; }
-.kaki-notif { margin: 0; padding: 10px 14px; font-size: 12px; }
+.kaki-notif { margin: 0; padding: 4px 14px 10px; font-size: 12px; }
+.email-notif { padding: 10px 14px 0; }
 
 /* ambang notifikasi di kartu watchlist */
 .ambang-wl { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--garis); font-size: 12px; color: var(--samar); cursor: default; }
@@ -541,6 +542,8 @@ footer p { max-width: 1360px; margin: 2px auto; }
 
 /* ---------- admin ---------- */
 .ruang-admin { max-width: 1100px; }
+.peringatan-periode { margin: 0 0 14px; padding: 10px 14px; font-size: 13px; border: 1px solid var(--garis-kuat); border-radius: var(--radius); background: var(--permukaan); color: var(--kuning); }
+.peringatan-periode.lewat { color: var(--negatif); border-color: var(--negatif); }
 .ruang-admin code, .langkah-model code { font-family: ui-monospace, Consolas, monospace; font-size: 12px; background: var(--permukaan-2); padding: 1px 5px; border-radius: 4px; }
 .form-admin {
   display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 14px; padding: 12px;

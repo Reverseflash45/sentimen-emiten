@@ -34,6 +34,7 @@ from app.models import (
     SumberBerita,
     Watchlist,
 )
+from data.lq45 import status_periode
 from app.schemas import (
     AkunAdmin,
     EmitenAdmin,
@@ -233,6 +234,13 @@ def ubah_akun(akun_id: int, badan: UbahAkun, admin: Pengguna = Depends(wajib_adm
 
 
 # ------------------------------------------------------------------ pemantauan
+
+
+@router.get("/periode-lq45")
+def periode_lq45(_: Pengguna = Depends(wajib_admin)) -> dict:
+    """Masa berlaku komposisi LQ45 di data/lq45.py."""
+    return status_periode()
+
 
 
 @router.get("/log", response_model=list[LogAdmin])

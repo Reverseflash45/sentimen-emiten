@@ -290,6 +290,8 @@ class Pengguna(Base):
     kata_sandi_hash: Mapped[str] = mapped_column(String(255))
     peran: Mapped[Peran] = mapped_column(Enum(Peran), default=Peran.PENGGUNA)
     aktif: Mapped[bool] = mapped_column(Boolean, default=True)
+    # notifikasi watchlist juga dikirim lewat email — hanya bila dinyalakan sendiri
+    kirim_email: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     dibuat_pada: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
 
     watchlist: Mapped[list[Watchlist]] = relationship(

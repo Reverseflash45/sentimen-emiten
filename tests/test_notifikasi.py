@@ -153,3 +153,52 @@ def test_api_notifikasi_milik_sendiri_dan_bisa_ditandai_dibaca(Sesi):
             assert k.get("/api/notifikasi").status_code == 401
     finally:
         app.dependency_overrides.clear()
+
+
+class SmtpTiruan:
+    terkirim: list = []
+
+    def __init__(self, host, port, timeout=None):
+        self.host = host
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def starttls(self):
+        pass
+
+    def login(self, user, sandi):
+        pass
+
+    def send_message(self, pesan):
+        SmtpTiruan.terkirim.append(pesan)
+
+
+def test_email_hanya_untuk_yang_menyalakan_dan_diam_tanpa_smtp(Sesi, monkeypatch):
+    from app.analitik import surel
+
+    with Sesi() as s:
+        sentimen_berbalik(s)
+        s.add(Watchlist(pengguna_id=1, emiten_id=1, ambang=0.3))
+        s.add(Watchlist(pengguna_id=2, emiten_id=1, ambang=0.3))
+        s.get(Pengguna, 1).kirim_email = True  # pengguna 2 tidak menyalakan email
+        s.commit()
+        baru = periksa_watchlist(s, HARI_INI)
+        s.commit()
+        assert len(baru) == 2
+
+        for k in ("SMTP_HOST", "SMTP_USER", "SMTP_PASSWORD"):
+            monkeypatch.delenv(k, raising=False)
+        assert surel.kirim_notifikasi(s, baru) == "nonaktif (SMTP belum diatur)"
+
+        SmtpTiruan.terkirim = []
+        monkeypatch.setattr(surel.smtplib, "SMTP", SmtpTiruan)
+        konfig = surel.KonfigSmtp("smtp.uji", 587, "bot@uji.test", "rahasia", "Bot <bot@uji.test>")
+        assert surel.kirim_notifikasi(s, baru, konfig) == "1 terkirim, 0 gagal"
+        (pesan,) = SmtpTiruan.terkirim
+        assert pesan["To"] == "satu@uji.test"
+        assert "BBCA" in pesan["Subject"]
+        assert "bukan rekomendasi" in pesan.get_content()

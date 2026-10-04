@@ -119,6 +119,7 @@ def selaraskan_skema() -> list[str]:
     pesan: list[str] = []
     Base.metadata.create_all(engine)
     kolom_watchlist = {k["name"] for k in inspect(engine).get_columns("watchlist")}
+    kolom_pengguna = {k["name"] for k in inspect(engine).get_columns("pengguna")}
     with engine.begin() as kon:
         if engine.dialect.name == "postgresql":
             # SQLAlchemy menyimpan NAMA anggota enum (ADMIN), bukan nilainya
@@ -132,6 +133,9 @@ def selaraskan_skema() -> list[str]:
         if "ambang" not in kolom_watchlist:
             kon.execute(text("ALTER TABLE watchlist ADD COLUMN ambang FLOAT NOT NULL DEFAULT 0.3"))
             pesan.append("watchlist: + kolom ambang")
+        if "kirim_email" not in kolom_pengguna:
+            kon.execute(text("ALTER TABLE pengguna ADD COLUMN kirim_email BOOLEAN NOT NULL DEFAULT FALSE"))
+            pesan.append("pengguna: + kolom kirim_email")
     return pesan
 
 

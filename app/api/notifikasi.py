@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from app.auth.dependensi import pengguna_aktif
 from app.database import get_session
 from app.models import Emiten, Notifikasi, Pengguna
-from app.schemas import DaftarNotifikasi, ItemNotifikasi
+from app.schemas import DaftarNotifikasi, ItemNotifikasi, UbahEmailNotifikasi
 
 router = APIRouter(prefix="/api/notifikasi", tags=["notifikasi"])
 
@@ -48,6 +48,19 @@ def daftar(
             for n, e in baris
         ],
     )
+
+
+@router.post("/email")
+def atur_email(
+    badan: UbahEmailNotifikasi,
+    pengguna: Pengguna = Depends(pengguna_aktif),
+    session: Session = Depends(get_session),
+) -> dict:
+    """Opt-in: notifikasi juga dikirim ke email akun ini."""
+    p = session.get(Pengguna, pengguna.id)
+    p.kirim_email = badan.aktif
+    session.commit()
+    return {"kirim_email": p.kirim_email}
 
 
 @router.post("/baca")

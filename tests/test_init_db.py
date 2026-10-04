@@ -160,3 +160,15 @@ def test_selaraskan_skema_menambah_kolom_ambang_ke_watchlist_lama(tmp_path, monk
     with mesin.connect() as kon:
         assert kon.execute(text("SELECT ambang FROM watchlist")).scalar() == 0.3
     assert init_db.selaraskan_skema() == []  # aman dijalankan ulang
+
+
+def test_status_periode_lq45():
+    from datetime import date
+
+    from data.lq45 import PERIODE_LQ45, status_periode
+
+    akhir = PERIODE_LQ45[1]
+    assert status_periode(date(akhir.year, akhir.month, 1))["status"] in ("berlaku", "segera_berakhir")
+    assert status_periode(akhir)["status"] == "segera_berakhir"
+    assert status_periode(date(akhir.year + 1, 1, 1))["status"] == "kedaluwarsa"
+    assert status_periode(PERIODE_LQ45[0])["status"] == "berlaku"

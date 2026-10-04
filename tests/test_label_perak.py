@@ -117,3 +117,14 @@ def test_kappa():
     assert metrik(benar, benar)["kappa"] == pytest.approx(1.0)
     # selalu menebak satu kelas: akurasi bisa lumayan, tetapi kappa 0
     assert metrik(benar, ["positif"] * 4)["kappa"] == pytest.approx(0.0)
+
+
+def test_csv_anotator_kedua_simpan_dan_muat(tmp_path, monkeypatch):
+    import scripts.label_anotator2 as a2
+
+    monkeypatch.setattr(a2, "BERKAS", tmp_path / "anotator_2.csv")
+    a2.simpan({(10, 1): ("BBCA", "positif", "2026-10-04T00:00:00+00:00"),
+               (11, 2): ("BMRI", "tidak_relevan", "2026-10-04T00:01:00+00:00")})
+    assert a2.muat() == {(10, 1): "positif", (11, 2): "tidak_relevan"}
+    # waktu pencatatan asli dipertahankan saat disimpan ulang
+    assert a2.muat_baris()[(10, 1)][2] == "2026-10-04T00:00:00+00:00"

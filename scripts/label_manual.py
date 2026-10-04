@@ -59,6 +59,23 @@ def baca_tombol(prompt: str) -> str:
         return (input() or " ")[0].lower()
 
 
+def tampilkan_pasangan(kaitan, berita, emiten, sumber, nomor: str) -> None:
+    """Satu pasangan berita-emiten, persis seperti yang dilihat setiap anotator.
+    Dipakai juga scripts/label_anotator2.py: anotator kedua harus melihat
+    tampilan yang sama, atau kesepakatan keduanya tidak bisa dibandingkan."""
+    tgl = berita.terbit_pada.strftime("%d %b %Y") if berita.terbit_pada else "-"
+    lebar = 88
+    print(_w("2", "─" * lebar))
+    print(_w("2", f"{nomor}  {sumber.nama} · {tgl}"))
+    print(_w("1", textwrap.fill(berita.judul, lebar)))
+    if berita.ringkasan:
+        print(textwrap.fill(berita.ringkasan[:600], lebar))
+    kutip = (kaitan.kutipan or "").strip()
+    print(_w("1;33", f"\n  Emiten: {emiten.kode} — {emiten.nama}"))
+    if kutip:
+        print(_w("33", textwrap.fill(f"  “{kutip}”", lebar, subsequent_indent="   ")))
+
+
 def urutan_acak(berita_id: int, emiten_id: int) -> str:
     """Urutan tampil yang acak tapi tetap: sampel tidak bias ke berita
     terbaru, dan sesi berikutnya melanjutkan urutan yang sama."""
@@ -120,17 +137,7 @@ def main() -> None:
         i = 0
         while i < len(antrean):
             kaitan, berita, emiten, sumber = antrean[i]
-            tgl = berita.terbit_pada.strftime("%d %b %Y") if berita.terbit_pada else "-"
-            lebar = 88
-            print(_w("2", "─" * lebar))
-            print(_w("2", f"[{jumlah + 1}/{a.target}]  {sumber.nama} · {tgl}"))
-            print(_w("1", textwrap.fill(berita.judul, lebar)))
-            if berita.ringkasan:
-                print(textwrap.fill(berita.ringkasan[:600], lebar))
-            kutip = (kaitan.kutipan or "").replace("…", "…").strip()
-            print(_w("1;33", f"\n  Emiten: {emiten.kode} — {emiten.nama}"))
-            if kutip:
-                print(_w("33", textwrap.fill(f"  “{kutip}”", lebar, subsequent_indent="   ")))
+            tampilkan_pasangan(kaitan, berita, emiten, sumber, f"[{jumlah + 1}/{a.target}]")
 
             t = baca_tombol("\n  [1] positif  [2] netral  [3] negatif  [x] tak relevan  [s] lewati  [u] batal  [q] keluar > ")
             if t == "q":
