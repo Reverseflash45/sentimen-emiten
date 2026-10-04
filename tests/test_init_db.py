@@ -139,3 +139,24 @@ def test_nonaktifkan_emiten_hanya_sekali(db):
     nonaktifkan_emiten_luar_daftar(db)
     db.commit()
     assert nonaktifkan_emiten_luar_daftar(db) == []
+
+
+def test_selaraskan_skema_menambah_kolom_ambang_ke_watchlist_lama(tmp_path, monkeypatch):
+    # create_all tidak menambah kolom ke tabel yang sudah ada; basis data yang
+    # dibuat sebelum fitur notifikasi tidak punya kolom ambang
+    from sqlalchemy import inspect, text
+
+    import scripts.init_db as init_db
+
+    mesin = create_engine(f"sqlite:///{tmp_path / 'lama.db'}", future=True)
+    with mesin.begin() as kon:
+        kon.execute(text("CREATE TABLE watchlist (id INTEGER PRIMARY KEY, pengguna_id INTEGER, "
+                         "emiten_id INTEGER, catatan TEXT, ditambah_pada DATETIME)"))
+        kon.execute(text("INSERT INTO watchlist (pengguna_id, emiten_id) VALUES (1, 1)"))
+    monkeypatch.setattr(init_db, "engine", mesin)
+
+    assert init_db.selaraskan_skema() == ["watchlist: + kolom ambang"]
+    assert "ambang" in {k["name"] for k in inspect(mesin).get_columns("watchlist")}
+    with mesin.connect() as kon:
+        assert kon.execute(text("SELECT ambang FROM watchlist")).scalar() == 0.3
+    assert init_db.selaraskan_skema() == []  # aman dijalankan ulang

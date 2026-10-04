@@ -59,6 +59,9 @@ def klien():
         s.add(Pengguna(email="biasa@uji.test", nama="Pengguna Uji",
                        kata_sandi_hash=hash_kata_sandi("rahasia123"),
                        peran=Peran.PENGGUNA))
+        s.add(Pengguna(email="admin@uji.test", nama="Admin Uji",
+                       kata_sandi_hash=hash_kata_sandi("rahasia123"),
+                       peran=Peran.ADMIN))
         s.commit()
 
         # 10 hari berita + harga, supaya korelasi bisa dihitung
@@ -128,6 +131,11 @@ def analis(klien):
 @pytest.fixture()
 def biasa(klien):
     return _kepala(klien, "biasa@uji.test")
+
+
+@pytest.fixture()
+def admin(klien):
+    return _kepala(klien, "admin@uji.test")
 
 
 def test_sehat(klien):
@@ -570,3 +578,91 @@ def test_tidak_relevan_hanya_untuk_analis(klien, biasa):
                       json={"kode_emiten": "BBCA"}).status_code == 401
     assert klien.post(f"/api/berita/{id_berita}/tidak-relevan",
                       json={"kode_emiten": "BBCA"}, headers=biasa).status_code == 403
+
+
+# ------------------------------------------------------------------ admin
+
+
+def test_halaman_admin_hanya_untuk_admin(klien, analis, admin):
+    assert klien.get("/api/admin/sumber").status_code == 401
+    assert klien.get("/api/admin/sumber", headers=analis).status_code == 403
+    assert klien.get("/api/admin/sumber", headers=admin).status_code == 200
+
+
+def test_admin_mencakup_hak_analis(klien, admin):
+    assert klien.get("/api/analis/antrean", headers=admin).status_code == 200
+
+
+def test_tambah_sumber_menolak_alamat_tidak_valid_dan_duplikat(klien, admin):
+    # SRS UC-06 alur alternatif 3a
+    r = klien.post("/api/admin/sumber", json={"nama": "Portal Baru", "url_rss": "bukan-alamat"}, headers=admin)
+    assert r.status_code == 400
+
+    r = klien.post("/api/admin/sumber", json={"nama": "Portal Baru", "url_rss": "https://baru.test/rss",
+                                              "kredibilitas": "portal_umum"}, headers=admin)
+    assert r.status_code == 201
+    assert r.json()["domain"] == "baru.test"
+
+    dobel = klien.post("/api/admin/sumber", json={"nama": "Nama Lain", "url_rss": "https://baru.test/rss2"},
+                       headers=admin)
+    assert dobel.status_code == 400
+
+
+def test_menonaktifkan_sumber_mengurangi_cakupan(klien, admin):
+    sebelum = klien.get("/api/ringkasan").json()["jumlah_sumber"]
+    id_sumber = klien.get("/api/admin/sumber", headers=admin).json()[0]["id"]
+    r = klien.patch(f"/api/admin/sumber/{id_sumber}", json={"aktif": False}, headers=admin)
+    assert r.status_code == 200 and r.json()["aktif"] is False
+    assert klien.get("/api/ringkasan").json()["jumlah_sumber"] == sebelum - 1
+
+
+def test_kelola_emiten(klien, admin, biasa):
+    assert klien.post("/api/admin/emiten", json={"kode": "BB1", "nama": "Salah"}, headers=admin).status_code == 422
+    r = klien.post("/api/admin/emiten", json={"kode": "unvr", "nama": "Unilever Indonesia Tbk",
+                                              "alias": " Unilever | Unilever Indonesia |"}, headers=admin)
+    assert r.status_code == 201
+    assert (r.json()["kode"], r.json()["alias"]) == ("UNVR", "Unilever|Unilever Indonesia")
+    assert klien.post("/api/admin/emiten", json={"kode": "UNVR", "nama": "Lagi"}, headers=admin).status_code == 400
+
+    # emiten nonaktif = di luar cakupan LQ45: watchlist menolaknya (UC-02 3a)
+    klien.patch("/api/admin/emiten/TLKM", json={"aktif": False}, headers=admin)
+    assert klien.post("/api/watchlist", json={"kode_emiten": "TLKM"}, headers=biasa).status_code == 400
+
+
+def test_kelola_akun(klien, admin):
+    r = klien.post("/api/admin/akun", json={"email": "Baru@Uji.test", "nama": "Akun Baru",
+                                            "peran": "analis", "kata_sandi": "sandiPanjang1"}, headers=admin)
+    assert r.status_code == 201
+    akun = r.json()
+    assert (akun["email"], akun["peran"]) == ("baru@uji.test", "analis")
+    assert klien.post("/api/auth/masuk", json={"email": "baru@uji.test",
+                                               "kata_sandi": "sandiPanjang1"}).status_code == 200
+    assert klien.post("/api/admin/akun", json={"email": "baru@uji.test", "nama": "Dobel",
+                                               "kata_sandi": "sandiPanjang1"}, headers=admin).status_code == 400
+
+    klien.patch(f"/api/admin/akun/{akun['id']}", json={"aktif": False}, headers=admin)
+    assert klien.post("/api/auth/masuk", json={"email": "baru@uji.test",
+                                               "kata_sandi": "sandiPanjang1"}).status_code == 401
+
+
+def test_admin_tidak_bisa_mengunci_dirinya_sendiri(klien, admin):
+    saya = klien.get("/api/auth/saya", headers=admin).json()["id"]
+    assert klien.patch(f"/api/admin/akun/{saya}", json={"aktif": False}, headers=admin).status_code == 400
+    assert klien.patch(f"/api/admin/akun/{saya}", json={"peran": "pengguna"}, headers=admin).status_code == 400
+
+
+def test_log_dan_status_model(klien, admin):
+    assert klien.get("/api/admin/log", headers=admin).status_code == 200
+    m = klien.get("/api/admin/model", headers=admin).json()
+    assert m["label_emas"]["total"] == 0
+    assert m["siap_dilatih"] is False
+    assert m["label_per_versi"] == {"leksikon-v1": 10}
+
+
+def test_ambang_watchlist_bisa_diatur(klien, biasa):
+    r = klien.post("/api/watchlist", json={"kode_emiten": "BBCA"}, headers=biasa)
+    assert r.json()["ambang"] == 0.3
+    r = klien.post("/api/watchlist", json={"kode_emiten": "BBCA", "ambang": 0.5}, headers=biasa)
+    assert r.json()["ambang"] == 0.5
+    assert klien.post("/api/watchlist", json={"kode_emiten": "BBCA", "ambang": 0.01},
+                      headers=biasa).status_code == 422

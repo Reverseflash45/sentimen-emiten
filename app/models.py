@@ -12,11 +12,12 @@ Catatan desain:
 from __future__ import annotations
 
 import enum
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from sqlalchemy import (
     BigInteger,
     Boolean,
+    Date,
     DateTime,
     Enum,
     Float,
@@ -271,6 +272,7 @@ class VerifikasiBerita(Base):
 class Peran(str, enum.Enum):
     PENGGUNA = "pengguna"    # bisa melihat dan mengelola watchlist sendiri
     ANALIS = "analis"        # bisa mengoreksi label dan status verifikasi
+    ADMIN = "admin"          # mengelola emiten, sumber, dan akun; mencakup hak analis
 
 
 class Pengguna(Base):
@@ -305,9 +307,39 @@ class Watchlist(Base):
     pengguna_id: Mapped[int] = mapped_column(ForeignKey("pengguna.id"), index=True)
     emiten_id: Mapped[int] = mapped_column(ForeignKey("emiten.id"), index=True)
     catatan: Mapped[str | None] = mapped_column(Text, default=None)
+    # besar perubahan skor sentimen (skala -1..+1) yang memicu notifikasi
+    ambang: Mapped[float] = mapped_column(Float, default=0.3, server_default="0.3")
     ditambah_pada: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
 
     pengguna: Mapped[Pengguna] = relationship(back_populates="watchlist")
+    emiten: Mapped[Emiten] = relationship()
+
+
+class Notifikasi(Base):
+    """Peringatan bahwa sentimen emiten di watchlist berubah tajam (SRS FR-6).
+
+    Disimpan, bukan dihitung saat dibuka, supaya pengguna yang baru masuk
+    beberapa hari kemudian tetap melihat perubahan yang terjadi selama ia
+    tidak membuka dasbor — dan angka yang ia lihat sama dengan angka saat
+    peringatan dibuat, walau label sesudahnya dikoreksi analis.
+    """
+
+    __tablename__ = "notifikasi"
+    __table_args__ = (
+        UniqueConstraint("pengguna_id", "emiten_id", "tanggal", name="uq_notifikasi_harian"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    pengguna_id: Mapped[int] = mapped_column(ForeignKey("pengguna.id"), index=True)
+    emiten_id: Mapped[int] = mapped_column(ForeignKey("emiten.id"))
+    tanggal: Mapped[date] = mapped_column(Date)
+    skor_sebelum: Mapped[float] = mapped_column(Float)
+    skor_sesudah: Mapped[float] = mapped_column(Float)
+    jumlah_berita: Mapped[int] = mapped_column(Integer, default=0)
+    pesan: Mapped[str] = mapped_column(Text)
+    dibaca: Mapped[bool] = mapped_column(Boolean, default=False)
+    dibuat_pada: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
     emiten: Mapped[Emiten] = relationship()
 
 

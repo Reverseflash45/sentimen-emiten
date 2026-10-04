@@ -27,12 +27,28 @@
     <ul id="saran" class="saran" role="listbox" hidden></ul>
   </div>
 
+  <div class="tampilan" id="pilih-tampilan" role="tablist" aria-label="Tampilan" hidden>
+    <button role="tab" class="aktif" data-tampilan="pasar" aria-selected="true">Pasar</button>
+    <button role="tab" data-tampilan="analis" aria-selected="false">Tinjauan <span class="jumlah" id="jumlah-tinjau"></span></button>
+    <button role="tab" data-tampilan="admin" aria-selected="false" id="tab-admin" hidden>Admin</button>
+  </div>
+
   <nav class="akun">
-    <div class="tampilan" id="pilih-tampilan" role="tablist" aria-label="Tampilan" hidden>
-      <button role="tab" class="aktif" data-tampilan="pasar" aria-selected="true">Pasar</button>
-      <button role="tab" data-tampilan="analis" aria-selected="false">Tinjauan <span class="jumlah" id="jumlah-tinjau"></span></button>
-    </div>
     <a class="tautan-api" href="/docs" target="_blank" rel="noreferrer">API</a>
+    <div class="notif" id="notif" hidden>
+      <button class="lonceng" id="tombol-notif" aria-label="Notifikasi" aria-expanded="false" aria-controls="panel-notif">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3a4.5 4.5 0 0 0-4.5 4.5c0 4-1.8 5.5-1.8 5.5h12.6s-1.8-1.5-1.8-5.5A4.5 4.5 0 0 0 10 3zM8.3 15.5a1.8 1.8 0 0 0 3.4 0" /></svg>
+        <span class="lencana-jumlah" id="jumlah-notif" hidden></span>
+      </button>
+      <div class="panel-notif" id="panel-notif" hidden>
+        <div class="kepala-notif">
+          <b>Notifikasi</b>
+          <button class="tautan-tombol" id="baca-semua">Tandai semua dibaca</button>
+        </div>
+        <div id="daftar-notif"></div>
+        <p class="ket kaki-notif">Muncul bila rata-rata sentimen 7 hari terakhir emiten di watchlist bergeser melewati ambang yang kamu pilih, dibanding 7 hari sebelumnya.</p>
+      </div>
+    </div>
     <span class="chip-akun" id="chip-akun" hidden>
       <span class="avatar" id="avatar"></span>
       <span class="akun-teks"><b id="nama-akun"></b><span id="peran-akun"></span></span>
@@ -215,7 +231,27 @@
       <div id="daftar-verifikasi"></div>
     </div>
   </section>
+
+  <!-- ===== admin ===== -->
+  <section class="ruang-admin" id="panel-admin" hidden>
+    <div class="kepala-analis">
+      <div>
+        <h1 class="judul-halaman">Pengelolaan sistem</h1>
+        <p class="ket">Daftar acuan penelitian tetap <code>data/lq45.py</code>: menjalankan <code>scripts.init_db</code>
+          menyelaraskan ulang emiten dan sumber yang tercantum di sana, termasuk menimpa perubahan dari halaman ini.</p>
+      </div>
+      <div class="segmen" role="tablist" aria-label="Bagian admin" id="tab-admin-isi">
+        <button role="tab" class="aktif" data-bagian="sumber">Sumber</button>
+        <button role="tab" data-bagian="emiten">Emiten</button>
+        <button role="tab" data-bagian="akun">Akun</button>
+        <button role="tab" data-bagian="log">Log</button>
+        <button role="tab" data-bagian="model">Model</button>
+      </div>
+    </div>
+    <div id="isi-admin"></div>
+  </section>
 </main>
+
 
 <footer>
   <p>Sistem menyajikan hubungan korelatif, bukan prediksi harga. Keputusan investasi tetap ada pada pengguna.</p>

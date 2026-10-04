@@ -33,6 +33,7 @@ pip install -r requirements.txt
 copy .env.example .env          # lalu sesuaikan isinya
 
 python -m scripts.init_db       # buat tabel + isi 45 emiten & 7 sumber
+python -m scripts.init_db --hanya-skema   # migrasi skema saja (kolom/enum baru)
 python -m scripts.cek_sumber    # periksa RSS mana yang masih hidup
 python -m scripts.collect       # jalankan satu siklus pengumpulan
 python -m scripts.petakan_ulang --semua   # cari emiten di badan artikel
@@ -43,7 +44,7 @@ python -m scripts.periksa_pemetaan --acak   # periksa presisi pemetaan manual
 python -m scripts.bersihkan_pemetaan --lihat  # buang pemetaan lama bila aturan berubah
 python -m scripts.verifikasi --csv data/keterbukaan/contoh.csv
 python -m scripts.buat_pengguna anda@contoh.id "Nama Anda" --peran analis
-pytest -q                       # 226 uji
+pytest -q                       # 240 uji
 ```
 
 Menjalankan API dan dasbor:
@@ -131,6 +132,7 @@ app/
     agregasi.py        skor sentimen harian (SRS 10.1 butir 6)
     statistik.py       Pearson & Spearman, ditulis sendiri
     korelasi.py        penyandingan sentimen dengan harga (butir 7)
+    notifikasi.py      peringatan perubahan sentimen emiten di watchlist (FR-6)
   klasifikasi/
     basis.py           antarmuka Pengklasifikasi — titik tukar model
     leksikon.py        baseline leksikon finansial Indonesia
@@ -150,14 +152,16 @@ app/
     berita.py          daftar berita, koreksi analis, status & jejak verifikasi
     sistem.py          ringkasan dasbor, daftar sumber, /api/sehat
     auth.py            masuk dan identitas pengguna
-    watchlist.py       watchlist per pengguna (SRS UC-02)
+    watchlist.py       watchlist per pengguna dan ambang notifikasinya (SRS UC-02)
+    notifikasi.py      daftar notifikasi & tandai dibaca
+    admin.py           kelola sumber, emiten, akun; log siklus; status data latih (FR-8, UC-06)
   static/              dasbor web (HTML + CSS + JS, tanpa pustaka luar)
   schemas.py           skema respons API
   main.py              aplikasi FastAPI
 data/lq45.py           daftar emiten & portal berita
 scripts/               perintah baris perintah
 siklus.bat             pembungkus untuk Task Scheduler Windows
-tests/                 226 uji, semuanya tanpa jaringan
+tests/                 240 uji, semuanya tanpa jaringan
 ```
 
 ## Endpoint
@@ -186,29 +190,57 @@ tests/                 226 uji, semuanya tanpa jaringan
 | DELETE | `/api/watchlist/{kode}` | hapus emiten dari watchlist |
 | GET | `/api/analis/antrean` | label model yang belum ditinjau, paling ragu dulu (`?kode=`, `?urut=`) |
 | GET | `/api/analis/statistik` | kesepakatan model–analis dan matriksnya, status verifikasi |
+| GET | `/api/notifikasi` | notifikasi milik pengguna yang masuk, beserta jumlah belum dibaca |
+| POST | `/api/notifikasi/baca` | tandai semua notifikasi dibaca |
+| GET/POST/PATCH | `/api/admin/sumber` | daftar, tambah, ubah portal berita (UC-06) |
+| GET/POST/PATCH | `/api/admin/emiten` | daftar, tambah, ubah emiten dan aliasnya |
+| GET/POST/PATCH | `/api/admin/akun` | daftar, buat, ubah peran/status/kata sandi akun |
+| GET | `/api/admin/log` | riwayat siklus pengumpulan per sumber |
+| GET | `/api/admin/model` | kesiapan label emas untuk pelatihan ulang |
 
 Endpoint `POST /api/berita/{id}/koreksi`, `/verifikasi`, `/tidak-relevan`, dan `/api/analis/*`
-menuntut peran **analis**; watchlist menuntut akun apa pun; sisanya bisa
-dibaca tanpa masuk.
+menuntut peran **analis** (atau admin); `/api/admin/*` menuntut **admin**;
+watchlist dan notifikasi menuntut akun apa pun; sisanya bisa dibaca tanpa masuk.
 
 Dasbor menyesuaikan tampilannya dengan peran yang masuk:
 
 - **Tamu** — ringkasan, pencarian emiten, grafik, peringkat, berita.
-- **Pengguna** — ditambah watchlist berbentuk kartu dan tombol ☆ Pantau di
-  panel detail emiten.
+- **Pengguna** — ditambah watchlist berbentuk kartu, tombol Pantau di panel
+  detail emiten, ambang notifikasi per emiten, dan lonceng notifikasi.
 - **Analis** — ditambah ruang kerja: antrean tinjauan label (setujui,
   koreksi, atau nyatakan tidak relevan dengan satu klik), antrean verifikasi
   berita, serta statistik
   kesepakatan model–analis. Karena analis melihat label model saat meninjau,
   koreksi ini dipakai untuk melatih ulang model tetapi **tidak** untuk
   mengujinya (lihat bagian IndoBERT).
+- **Admin** — semua hak analis, ditambah halaman pengelolaan: sumber berita
+  dan kredibilitasnya, daftar emiten dan aliasnya, akun pengguna, riwayat
+  siklus pengumpulan, serta kesiapan data latih model.
 
+## Notifikasi watchlist
+
+Siklus terjadwal (tiap 4 jam) membandingkan rata-rata skor sentimen 7 hari
+terakhir setiap emiten di watchlist dengan 7 hari sebelumnya. Bila selisihnya
+mencapai ambang yang dipilih pengguna untuk emiten itu (bawaan ±0,3), sistem
+membuat notifikasi di dalam aplikasi. Tiga pengaman:
+
+- kedua jendela harus punya minimal 2 berita — satu berita bisa menggeser
+  rata-rata sejauh apa pun, dan itu bukan perubahan sentimen;
+- rata-rata ditimbang jumlah berita per hari, sama dengan grafik dasbor;
+- emiten yang sudah diperingatkan tidak diperingatkan lagi selama 7 hari.
+
+Notifikasi disimpan, bukan dihitung saat dasbor dibuka, supaya pengguna yang
+baru masuk beberapa hari kemudian tetap melihat perubahan yang terjadi selama
+ia tidak membuka dasbor. Saluran email sengaja belum dipakai: butuh akun
+pengirim dan izin pengguna, sementara notifikasi di aplikasi tidak.
 ## Akun dan peran
 
 ```bash
-python -m scripts.buat_pengguna anda@contoh.id "Nama Anda" --peran analis
+python -m scripts.buat_pengguna anda@contoh.id "Nama Anda" --peran admin
 python -m scripts.buat_pengguna rekan@contoh.id "Rekan" --peran pengguna
 ```
+
+Setelah ada satu admin, akun lain bisa dibuat dari halaman Admin di dasbor.
 
 Kata sandi ditanyakan lewat prompt tersembunyi, bukan lewat argumen — argumen
 baris perintah tersimpan di riwayat shell dan terlihat di daftar proses.
@@ -217,6 +249,18 @@ baris perintah tersimpan di riwayat shell dan terlihat di daftar proses.
 | --- | --- |
 | `pengguna` | melihat semua data, mengelola watchlist sendiri |
 | `analis` | semua di atas, ditambah koreksi label dan status verifikasi |
+| `admin` | semua di atas, ditambah kelola sumber, emiten, dan akun |
+
+Admin tidak bisa menonaktifkan atau menurunkan peran akunnya sendiri — tanpa
+admin lain, tidak ada lagi yang bisa mengembalikan haknya kecuali lewat basis
+data langsung.
+
+Halaman Admin mengubah basis data, sedangkan `data/lq45.py` tetap acuan resmi
+daftar emiten dan portal penelitian. `init_db` menyelaraskan basis data ke
+berkas itu, jadi perubahan dari halaman Admin pada emiten atau portal yang
+tercantum di sana akan tertimpa saat `init_db` dijalankan. Itu disengaja:
+daftar yang dipakai penelitian harus terbaca di repositori, bukan hanya di
+basis data.
 
 Sebelum dipakai di luar mesin sendiri, isi `SECRET_KEY` di `.env` dengan nilai
 acak:
@@ -459,7 +503,7 @@ sama.
 
 - Melatih IndoBERT — infrastrukturnya sudah ada (lihat "IndoBERT" di bawah),
   menunggu label manual yang cukup
-- Notifikasi ke pengguna saat sentimen emiten watchlist bergerak tajam
+- Notifikasi lewat email (notifikasi di dalam aplikasi sudah ada)
 - Verifikasi daftar LQ45 terhadap pengumuman resmi BEI terbaru
 
 ## Batasan yang disengaja

@@ -606,7 +606,7 @@ async function muatBerita() {
       ? new Date(b.terbit_pada).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })
       : "tanggal tidak diketahui";
     const aksi = el("div", { class: "aksi" });
-    if (state.saya?.peran === "analis") {
+    if (bisaMeninjau()) {
       for (const sent of ["positif", "netral", "negatif"]) {
         const tombol = el("button", {}, `Koreksi → ${sent}`);
         tombol.onclick = async () => {
@@ -616,7 +616,7 @@ async function muatBerita() {
             toast(`Label ${state.kode} diubah ke ${sent}`);
             await muatBerita();
             await muatEmiten();
-            if (state.saya?.peran === "analis") muatStatistikAnalis();
+            if (bisaMeninjau()) muatStatistikAnalis();
           } catch (e) {
             toast(e.message, "gagal");
           } finally {
@@ -781,17 +781,21 @@ async function muatPeringkat() {
 
 /* ---------- akun ---------- */
 
-const PERAN = { pengguna: { label: "Pengguna" }, analis: { label: "Analis" } };
+const PERAN = { pengguna: { label: "Pengguna" }, analis: { label: "Analis" }, admin: { label: "Admin" } };
+// admin mencakup hak analis: meninjau label dan status verifikasi
+const bisaMeninjau = () => ["analis", "admin"].includes(state.saya?.peran);
 
 function pilihTampilan(nama) {
   $("#tampilan-pasar").hidden = nama !== "pasar";
   $("#panel-analis").hidden = nama !== "analis";
+  $("#panel-admin").hidden = nama !== "admin";
   for (const b of $$("#pilih-tampilan button")) {
     b.classList.toggle("aktif", b.dataset.tampilan === nama);
     b.setAttribute("aria-selected", String(b.dataset.tampilan === nama));
   }
   $("#tooltip").hidden = true;
   if (nama === "pasar" && state.grafik) gambarGrafik(); // lebar wadah bisa berubah saat tersembunyi
+  if (nama === "admin") muatAdmin();
 }
 
 function perbaruiAkun() {
@@ -801,8 +805,15 @@ function perbaruiAkun() {
   $("#chip-akun").hidden = !saya;
   $("#tombol-masuk").textContent = saya ? "Keluar" : "Masuk";
   $("#panel-watchlist").hidden = !saya;
-  $("#pilih-tampilan").hidden = peran !== "analis";
-  if (peran !== "analis") pilihTampilan("pasar");
+  $("#pilih-tampilan").hidden = !bisaMeninjau();
+  $("#tab-admin").hidden = peran !== "admin";
+  const kini = $("#pilih-tampilan button.aktif")?.dataset.tampilan;
+  if (!bisaMeninjau() || (kini === "admin" && peran !== "admin")) pilihTampilan("pasar");
+  $("#notif").hidden = !saya;
+  if (!saya) {
+    $("#panel-notif").hidden = true;
+    clearInterval(state.tundaNotif);
+  }
   $("#tombol-pantau").hidden = !saya;
   if (saya) {
     $("#avatar").textContent = saya.nama.split(/\s+/).map((k) => k[0]).slice(0, 2).join("").toUpperCase();
@@ -835,7 +846,11 @@ async function kirimMasuk(e) {
     perbaruiAkun();
     toast(`Masuk sebagai ${PERAN[state.saya.peran].label.toLowerCase()}`);
     await muatWatchlist();
-    if (state.saya.peran === "analis") muatRuangAnalis();
+    if (bisaMeninjau()) muatRuangAnalis();
+    muatNotifikasi();
+    // notifikasi dibuat siklus terjadwal; periksa ulang tiap 5 menit selama tab terbuka
+    clearInterval(state.tundaNotif);
+    state.tundaNotif = setInterval(muatNotifikasi, 5 * 60 * 1000);
     if (state.kode) muatBerita();
   } catch (err) {
     g.textContent = err.message;
@@ -888,11 +903,39 @@ async function muatWatchlist() {
         el("span", {}, `${w.berita_7_hari} berita`),
         el("span", {}, w.harga_terakhir == null ? "—" : `Rp ${fmtAngka(w.harga_terakhir)}`),
       ]),
+      pilihAmbang(w),
     ]);
     kartu.onclick = () => pilihEmiten(w.kode);
     kartu.onkeydown = (e) => { if (e.key === "Enter") pilihEmiten(w.kode); };
     wadah.append(kartu);
   }
+}
+
+/* UC-02: ambang perubahan sentimen yang memicu notifikasi, per emiten. */
+function pilihAmbang(w) {
+  const label = (v) => `±${String(v).replace(".", ",")}`;
+  const pilih = el("select", { "aria-label": `Ambang notifikasi ${w.kode}` });
+  const nilai = [0.2, 0.3, 0.5, 0.75, 1];
+  if (!nilai.some((v) => Math.abs(v - w.ambang) < 1e-9)) nilai.push(w.ambang);
+  for (const v of nilai.sort((a, b) => a - b)) {
+    const o = el("option", { value: String(v) }, label(v));
+    o.selected = Math.abs(v - w.ambang) < 1e-9;
+    pilih.append(o);
+  }
+  pilih.onchange = async () => {
+    try {
+      await kirimJson("/api/watchlist", { kode_emiten: w.kode, ambang: Number(pilih.value) });
+      toast(`${w.kode}: beri tahu bila sentimen bergeser ${label(Number(pilih.value))}`);
+    } catch (e) {
+      toast(e.message, "gagal");
+    }
+  };
+  const baris = el("div", { class: "ambang-wl", title: "Rata-rata sentimen 7 hari terakhir dibanding 7 hari sebelumnya" },
+    [el("span", {}, "Beri tahu bila bergeser"), pilih]);
+  // kartu bisa diklik untuk membuka emiten; pilihan ambang tidak boleh ikut memicunya
+  baris.onclick = (e) => e.stopPropagation();
+  baris.onkeydown = (e) => e.stopPropagation();
+  return baris;
 }
 
 function perbaruiTombolPantau() {
@@ -1115,6 +1158,291 @@ function pasangRuangAnalis() {
   $("#verifikasi-status").onchange = muatVerifikasi;
 }
 
+/* ---------- notifikasi (FR-6) ---------- */
+
+function waktuRelatif(iso) {
+  const menit = (Date.now() - new Date(iso).getTime()) / 60000;
+  if (menit < 1) return "baru saja";
+  if (menit < 60) return `${Math.round(menit)} menit lalu`;
+  if (menit < 1440) return `${Math.round(menit / 60)} jam lalu`;
+  return new Date(iso).toLocaleDateString("id-ID", { day: "numeric", month: "short" });
+}
+
+async function muatNotifikasi() {
+  if (!state.saya) return;
+  try {
+    state.notif = await ambil("/api/notifikasi?limit=20");
+  } catch {
+    return;
+  }
+  const n = state.notif.belum_dibaca;
+  const j = $("#jumlah-notif");
+  j.hidden = !n;
+  j.textContent = n > 9 ? "9+" : String(n);
+  $("#tombol-notif").setAttribute("aria-label", n ? `Notifikasi, ${n} belum dibaca` : "Notifikasi");
+  gambarNotifikasi();
+}
+
+function gambarNotifikasi() {
+  const wadah = $("#daftar-notif");
+  wadah.innerHTML = "";
+  const item = state.notif?.item || [];
+  $("#baca-semua").hidden = !state.notif?.belum_dibaca;
+  if (!item.length) {
+    wadah.append(el("p", { class: "kosong-notif" }, state.watchlist.size
+      ? "Belum ada perubahan sentimen yang melewati ambang."
+      : "Pantau emiten dulu — notifikasi hanya untuk emiten di watchlist."));
+    return;
+  }
+  for (const n of item) {
+    const naik = n.skor_sesudah > n.skor_sebelum;
+    const b = el("button", { class: `item-notif${n.dibaca ? "" : " baru"}` }, [
+      el("span", { class: `arah ${naik ? "naik" : "turun"}`, "aria-hidden": "true" }, naik ? "▲" : "▼"),
+      el("span", { class: "isi-notif" }, [
+        el("b", {}, n.kode), " ", n.pesan.replace(/^Sentimen \S+ /, ""),
+        el("span", { class: "waktu" }, waktuRelatif(n.dibuat_pada)),
+      ]),
+    ]);
+    b.onclick = () => {
+      bukaNotif(false);
+      pilihTampilan("pasar");
+      pilihEmiten(n.kode);
+    };
+    wadah.append(b);
+  }
+}
+
+function bukaNotif(buka) {
+  $("#panel-notif").hidden = !buka;
+  $("#tombol-notif").setAttribute("aria-expanded", String(buka));
+  if (buka) muatNotifikasi();
+}
+
+/* ---------- admin (FR-8, UC-06) ---------- */
+
+const KREDIBILITAS = {
+  terverifikasi_dewan_pers: "Terverifikasi Dewan Pers",
+  portal_umum: "Portal umum",
+  tidak_terverifikasi: "Tidak terverifikasi",
+};
+
+function pilihan(opsi, nilai, label) {
+  const s = el("select", { "aria-label": label });
+  for (const [v, teks] of Object.entries(opsi)) {
+    const o = el("option", { value: v }, teks);
+    o.selected = v === nilai;
+    s.append(o);
+  }
+  return s;
+}
+
+function tabelAdmin(kolom, baris) {
+  const t = el("table", { class: "tabel-admin" });
+  t.append(el("thead", {}, el("tr", {}, kolom.map(([teks, kelas]) => el("th", kelas ? { class: kelas } : {}, teks)))));
+  t.append(el("tbody", {}, baris));
+  return el("div", { class: "bungkus-admin" }, t);
+}
+
+/* Perubahan kecil (centang, pilihan) langsung disimpan; bila gagal, kendali
+   dikembalikan ke nilai lama supaya layar tidak berbohong soal isi basis data. */
+async function simpanAdmin(url, badan, pesan, kembalikan) {
+  try {
+    await kirimJson(url, badan, "PATCH");
+    toast(pesan);
+  } catch (e) {
+    toast(e.message, "gagal");
+    if (kembalikan) kembalikan();
+  }
+}
+
+function formAdmin(isian, teksTombol, kirim) {
+  const tombol = el("button", { class: "tombol kecil", type: "submit" }, teksTombol);
+  const form = el("form", { class: "form-admin" }, [...isian, tombol]);
+  form.onsubmit = async (e) => {
+    e.preventDefault();
+    tombol.disabled = true;
+    try {
+      await kirim();
+      muatAdmin();
+    } catch (err) {
+      toast(err.message, "gagal");
+    } finally {
+      tombol.disabled = false;
+    }
+  };
+  return form;
+}
+
+const isian = (atribut) => el("input", { required: "", ...atribut });
+
+async function adminSumber(wadah) {
+  const daftar = await ambil("/api/admin/sumber");
+  const nama = isian({ placeholder: "Nama portal", "aria-label": "Nama portal" });
+  const url = isian({ type: "url", placeholder: "https://portal.co.id/rss", "aria-label": "Alamat RSS", class: "lebar" });
+  const kred = pilihan(KREDIBILITAS, "portal_umum", "Kredibilitas");
+  wadah.append(formAdmin([nama, url, kred], "Tambah sumber", async () => {
+    await kirimJson("/api/admin/sumber", { nama: nama.value, url_rss: url.value, kredibilitas: kred.value });
+    toast(`${nama.value} ditambahkan — ikut dikumpulkan pada siklus berikutnya`);
+  }));
+  wadah.append(tabelAdmin([["Portal"], ["Kredibilitas"], ["Berita", "angka"], ["Siklus terakhir"], ["Aktif", "tengah"]],
+    daftar.map((s) => {
+      const k = pilihan(KREDIBILITAS, s.kredibilitas, `Kredibilitas ${s.nama}`);
+      k.onchange = () => simpanAdmin(`/api/admin/sumber/${s.id}`, { kredibilitas: k.value },
+        `Kredibilitas ${s.nama} diperbarui`, () => { k.value = s.kredibilitas; });
+      const aktif = el("input", { type: "checkbox", "aria-label": `${s.nama} aktif` });
+      aktif.checked = s.aktif;
+      aktif.onchange = () => simpanAdmin(`/api/admin/sumber/${s.id}`, { aktif: aktif.checked },
+        `${s.nama} ${aktif.checked ? "diaktifkan" : "dinonaktifkan"}`, () => { aktif.checked = !aktif.checked; });
+      const status = s.siklus_terakhir
+        ? el("span", { class: s.siklus_terakhir_berhasil ? "status-ok" : "status-gagal", title: s.pesan_terakhir || "" },
+          `${s.siklus_terakhir_berhasil ? "Berhasil" : "Gagal"} · ${waktuRelatif(s.siklus_terakhir)}`)
+        : el("span", { class: "redup" }, "belum pernah");
+      return el("tr", {}, [
+        el("td", {}, [el("div", { class: "utama" }, s.nama), el("div", { class: "sub" }, s.url_rss || s.domain)]),
+        el("td", {}, k), el("td", { class: "angka" }, fmtAngka(s.jumlah_berita)), el("td", {}, status),
+        el("td", { class: "tengah" }, aktif),
+      ]);
+    })));
+}
+
+async function adminEmiten(wadah) {
+  const daftar = await ambil("/api/admin/emiten");
+  const kode = isian({ placeholder: "Kode", maxlength: "4", "aria-label": "Kode emiten", class: "pendek" });
+  const nama = isian({ placeholder: "Nama perusahaan", "aria-label": "Nama perusahaan" });
+  const sektor = el("input", { placeholder: "Sektor", "aria-label": "Sektor" });
+  const alias = el("input", { placeholder: "Alias, pisah dengan |", "aria-label": "Alias", class: "lebar" });
+  wadah.append(formAdmin([kode, nama, sektor, alias], "Tambah emiten", async () => {
+    await kirimJson("/api/admin/emiten", { kode: kode.value, nama: nama.value, sektor: sektor.value || null, alias: alias.value || null });
+    toast(`${kode.value.toUpperCase()} ditambahkan`);
+  }));
+  const saring = el("input", { type: "search", placeholder: "Saring emiten…", "aria-label": "Saring emiten", class: "saring-admin" });
+  wadah.append(saring);
+  const baris = daftar.map((e) => {
+    const a = el("input", { value: e.alias || "", placeholder: "—", "aria-label": `Alias ${e.kode}`, class: "lebar" });
+    a.onchange = () => simpanAdmin(`/api/admin/emiten/${e.kode}`, { alias: a.value }, `Alias ${e.kode} disimpan`);
+    const aktif = el("input", { type: "checkbox", "aria-label": `${e.kode} dipantau` });
+    aktif.checked = e.aktif;
+    aktif.onchange = () => simpanAdmin(`/api/admin/emiten/${e.kode}`, { aktif: aktif.checked },
+      `${e.kode} ${aktif.checked ? "dipantau lagi" : "tidak lagi dipantau"}`, () => { aktif.checked = !aktif.checked; });
+    const tr = el("tr", { class: e.aktif ? "" : "nonaktif" }, [
+      el("td", {}, [el("div", { class: "utama" }, e.kode), el("div", { class: "sub" }, e.nama)]),
+      el("td", { class: "redup" }, e.sektor || "—"), el("td", {}, a),
+      el("td", { class: "angka" }, fmtAngka(e.jumlah_berita)), el("td", { class: "tengah" }, aktif),
+    ]);
+    tr.dataset.cari = `${e.kode} ${e.nama} ${e.sektor || ""} ${e.alias || ""}`.toLowerCase();
+    return tr;
+  });
+  saring.oninput = () => {
+    const q = saring.value.trim().toLowerCase();
+    for (const tr of baris) tr.hidden = Boolean(q) && !tr.dataset.cari.includes(q);
+  };
+  wadah.append(tabelAdmin([["Emiten"], ["Sektor"], ["Alias (untuk pencocokan)"], ["Berita", "angka"], ["Dipantau", "tengah"]], baris));
+  wadah.append(el("p", { class: "ket" }, "Emiten yang tidak dipantau tidak dihapus: berita dan harganya tetap tersimpan sebagai catatan periode sebelumnya, tetapi tidak lagi ikut dicocokkan."));
+}
+
+async function adminAkun(wadah) {
+  const daftar = await ambil("/api/admin/akun");
+  const LABEL = { pengguna: "Pengguna", analis: "Analis", admin: "Admin" };
+  const email = isian({ type: "email", placeholder: "email@contoh.id", "aria-label": "Email" });
+  const nama = isian({ placeholder: "Nama", "aria-label": "Nama" });
+  const peran = pilihan(LABEL, "pengguna", "Peran");
+  const sandi = isian({ type: "password", placeholder: "Kata sandi (min. 10)", minlength: "10", autocomplete: "new-password", "aria-label": "Kata sandi" });
+  wadah.append(formAdmin([email, nama, peran, sandi], "Buat akun", async () => {
+    await kirimJson("/api/admin/akun", { email: email.value, nama: nama.value, peran: peran.value, kata_sandi: sandi.value });
+    toast(`Akun ${email.value} dibuat`);
+  }));
+  wadah.append(tabelAdmin([["Akun"], ["Peran"], ["Watchlist", "angka"], ["Dibuat"], ["Aktif", "tengah"], [""]],
+    daftar.map((a) => {
+      const diri = a.id === state.saya.id;
+      const p = pilihan(LABEL, a.peran, `Peran ${a.email}`);
+      p.disabled = diri;
+      p.onchange = () => simpanAdmin(`/api/admin/akun/${a.id}`, { peran: p.value }, `Peran ${a.nama} diubah ke ${LABEL[p.value]}`,
+        () => { p.value = a.peran; });
+      const aktif = el("input", { type: "checkbox", "aria-label": `${a.email} aktif` });
+      aktif.checked = a.aktif;
+      aktif.disabled = diri;
+      aktif.onchange = () => simpanAdmin(`/api/admin/akun/${a.id}`, { aktif: aktif.checked },
+        `${a.nama} ${aktif.checked ? "diaktifkan" : "dinonaktifkan"}`, () => { aktif.checked = !aktif.checked; });
+      const ulang = el("button", { class: "tautan-tombol", type: "button" }, "Atur ulang sandi");
+      ulang.onclick = async () => {
+        const baru = window.prompt(`Kata sandi baru untuk ${a.email} (minimal 10 karakter):`);
+        if (!baru) return;
+        if (baru.length < 10) return toast("Kata sandi minimal 10 karakter", "gagal");
+        await simpanAdmin(`/api/admin/akun/${a.id}`, { kata_sandi: baru }, `Kata sandi ${a.nama} diganti`);
+      };
+      return el("tr", { class: a.aktif ? "" : "nonaktif" }, [
+        el("td", {}, [el("div", { class: "utama" }, a.nama + (diri ? " (kamu)" : "")), el("div", { class: "sub" }, a.email)]),
+        el("td", {}, p), el("td", { class: "angka" }, String(a.jumlah_watchlist)),
+        el("td", { class: "redup" }, new Date(a.dibuat_pada).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })),
+        el("td", { class: "tengah" }, aktif), el("td", {}, ulang),
+      ]);
+    })));
+}
+
+async function adminLog(wadah) {
+  const daftar = await ambil("/api/admin/log?limit=80");
+  const sehari = daftar.filter((l) => Date.now() - new Date(l.mulai_pada).getTime() < 86400000);
+  const gagal = sehari.filter((l) => !l.berhasil).length;
+  wadah.append(el("p", { class: "ringkas-admin" }, [
+    el("b", {}, `${sehari.length}`), " pengambilan sumber dalam 24 jam · ",
+    el("b", {}, fmtAngka(sehari.reduce((n, l) => n + l.jumlah_baru, 0))), " berita baru · ",
+    el("b", { class: gagal ? "turun" : "" }, String(gagal)), " gagal",
+  ]));
+  wadah.append(tabelAdmin([["Waktu"], ["Sumber"], ["Ditemukan", "angka"], ["Baru", "angka"], ["Status"]],
+    daftar.map((l) => el("tr", {}, [
+      el("td", { class: "redup nowrap" }, new Date(l.mulai_pada).toLocaleString("id-ID", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })),
+      el("td", {}, l.sumber || "—"),
+      el("td", { class: "angka" }, String(l.jumlah_ditemukan)), el("td", { class: "angka" }, String(l.jumlah_baru)),
+      el("td", {}, l.berhasil ? el("span", { class: "status-ok" }, "Berhasil")
+        : [el("span", { class: "status-gagal" }, "Gagal"), el("div", { class: "sub" }, l.pesan || "")]),
+    ]))));
+}
+
+async function adminModel(wadah) {
+  const m = await ambil("/api/admin/model");
+  const latih = m.label_emas.latih;
+  const persen = Math.min(100, Math.round((latih / m.minimal_latih) * 100));
+  const bilah = el("div", { class: "bilah" }, el("i"));
+  bilah.firstChild.style.width = `${persen}%`;
+  const kotak = (label, nilai, sub, tambahan = null) => el("div", { class: "kotak" },
+    [el("div", { class: "label" }, label), el("div", { class: "nilai" }, nilai), el("div", { class: "sub" }, sub), tambahan]);
+  const sebaran = Object.entries(m.sebaran_kelas).map(([k, v]) => `${v} ${k}`).join(" · ") || "belum ada";
+  const versi = Object.entries(m.label_per_versi).map(([k, v]) => `${k}: ${fmtAngka(v)}`).join(" · ") || "belum ada";
+  wadah.append(el("div", { class: "statistik-analis model-admin" }, [
+    kotak("Label emas", fmtAngka(m.label_emas.total), sebaran),
+    kotak("Data latih", `${fmtAngka(latih)} / ${m.minimal_latih}`, m.siap_dilatih ? "cukup untuk dilatih" : "minimal untuk mulai melatih", bilah),
+    kotak("Validasi · Uji", `${m.label_emas.validasi} · ${m.label_emas.uji}`, "dipisah per berita, 70/15/15"),
+    kotak("Label model tersimpan", "", versi),
+  ]));
+  const langkah = [
+    ["Anotasi label emas (buta, tanpa melihat prediksi model)", "python -m scripts.label_manual"],
+    ["Latih pembanding TF-IDF + Naive Bayes / SVM", "python -m scripts.latih_klasik"],
+    ["Fine-tuning IndoBERT (butuh GPU)", "python -m scripts.latih_indobert"],
+    ["Bandingkan semua model pada data uji", "python -m scripts.evaluasi_model"],
+    ["Labeli ulang seluruh berita dengan model terbaik", "python -m scripts.klasifikasi --model indobert --ulangi"],
+  ];
+  wadah.append(el("h3", { class: "subjudul" }, "Pelatihan ulang"));
+  wadah.append(el("p", { class: "ket" }, "Pelatihan dijalankan di laptop ber-GPU, bukan dari server web: server tidak punya GPU, dan proses berdurasi puluhan menit akan diputus batas waktu permintaan."));
+  wadah.append(el("ol", { class: "langkah-model" }, langkah.map(([teks, perintah]) =>
+    el("li", {}, [el("span", {}, teks), el("code", {}, perintah)]))));
+}
+
+const BAGIAN_ADMIN = { sumber: adminSumber, emiten: adminEmiten, akun: adminAkun, log: adminLog, model: adminModel };
+
+async function muatAdmin() {
+  const bagian = state.bagianAdmin || "sumber";
+  for (const b of $$("#tab-admin-isi button")) b.classList.toggle("aktif", b.dataset.bagian === bagian);
+  const wadah = $("#isi-admin");
+  memuat(wadah);
+  const isi = el("div");
+  try {
+    await BAGIAN_ADMIN[bagian](isi);
+    wadah.replaceChildren(isi);
+  } catch (e) {
+    wadah.replaceChildren(kosong("Gagal memuat", e.message));
+  }
+}
+
 /* ---------- alur utama ---------- */
 
 function pilihEmiten(kode) {
@@ -1285,10 +1613,24 @@ function pasangPintasan() {
   $("#saring-sentimen").onchange = muatBerita;
   $("#saring-status").onchange = muatBerita;
   for (const b of $$("#pilih-tampilan button")) b.onclick = () => pilihTampilan(b.dataset.tampilan);
+  for (const b of $$("#tab-admin-isi button")) {
+    b.onclick = () => { state.bagianAdmin = b.dataset.bagian; muatAdmin(); };
+  }
+  $("#tombol-notif").onclick = (e) => { e.stopPropagation(); bukaNotif($("#panel-notif").hidden); };
+  $("#baca-semua").onclick = async (e) => {
+    e.stopPropagation();
+    try {
+      await kirimJson("/api/notifikasi/baca", {});
+      await muatNotifikasi();
+    } catch (err) {
+      toast(err.message, "gagal");
+    }
+  };
   // panel pengaturan menutup sendiri saat klik di luar, seperti menu biasa
   document.addEventListener("click", (e) => {
     const d = $(".lanjutan");
     if (d.open && !d.contains(e.target)) d.open = false;
+    if (!$("#panel-notif").hidden && !$("#notif").contains(e.target)) bukaNotif(false);
   });
   perbaruiAkun();
   try {

@@ -1,7 +1,12 @@
 """Membuat tabel dan menyelaraskan data emiten serta sumber berita.
 
 Jalankan:  python -m scripts.init_db
+           python -m scripts.init_db --hanya-skema   # migrasi skema saja
 Aman diulang — data yang sudah ada diperbarui, bukan diduplikasi.
+
+`create_all` hanya membuat tabel yang belum ada; ia tidak menambah kolom pada
+tabel lama maupun nilai baru pada tipe ENUM PostgreSQL. Perubahan semacam itu
+ditangani `selaraskan_skema`, dengan perintah yang aman dijalankan berulang.
 
 Penting: nama, sektor, dan alias emiten yang sudah ada IKUT DIPERBARUI dari
 `data/lq45.py`. Sebelumnya baris yang sudah ada dilewati begitu saja, sehingga
@@ -13,9 +18,10 @@ sudah benar.
 
 from __future__ import annotations
 
+import argparse
 from dataclasses import dataclass
 
-from sqlalchemy import select
+from sqlalchemy import inspect, select, text
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal, engine
@@ -108,8 +114,37 @@ def nonaktifkan_sumber(session: Session) -> list[str]:
     return pesan
 
 
-def main() -> None:
+def selaraskan_skema() -> list[str]:
+    """Perubahan skema yang tidak bisa dilakukan create_all."""
+    pesan: list[str] = []
     Base.metadata.create_all(engine)
+    kolom_watchlist = {k["name"] for k in inspect(engine).get_columns("watchlist")}
+    with engine.begin() as kon:
+        if engine.dialect.name == "postgresql":
+            # SQLAlchemy menyimpan NAMA anggota enum (ADMIN), bukan nilainya
+            ada = kon.execute(text(
+                "select 1 from pg_enum e join pg_type t on t.oid = e.enumtypid "
+                "where t.typname = 'peran' and e.enumlabel = 'ADMIN'"
+            )).first()
+            if ada is None:
+                kon.execute(text("ALTER TYPE peran ADD VALUE IF NOT EXISTS 'ADMIN'"))
+                pesan.append("enum peran: + ADMIN")
+        if "ambang" not in kolom_watchlist:
+            kon.execute(text("ALTER TABLE watchlist ADD COLUMN ambang FLOAT NOT NULL DEFAULT 0.3"))
+            pesan.append("watchlist: + kolom ambang")
+    return pesan
+
+
+def main() -> None:
+    p = argparse.ArgumentParser(description="Membuat tabel dan menyelaraskan data awal")
+    p.add_argument("--hanya-skema", action="store_true",
+                   help="hanya migrasi skema; daftar emiten dan sumber tidak disentuh")
+    a = p.parse_args()
+
+    for baris in selaraskan_skema():
+        print(f"Skema   : {baris}")
+    if a.hanya_skema:
+        return
     with SessionLocal() as session:
         emiten = selaraskan_emiten(session)
         sumber = selaraskan_sumber(session)

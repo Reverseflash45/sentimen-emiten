@@ -40,6 +40,13 @@ def wajib_analis(pengguna: Pengguna = Depends(pengguna_aktif)) -> Pengguna:
     Peran diambil dari basis data, bukan dari isi token — supaya pencabutan hak
     langsung berlaku tanpa menunggu token lama kedaluwarsa.
     """
-    if pengguna.peran is not Peran.ANALIS:
+    if pengguna.peran not in (Peran.ANALIS, Peran.ADMIN):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "perlu peran analis")
+    return pengguna
+
+
+def wajib_admin(pengguna: Pengguna = Depends(pengguna_aktif)) -> Pengguna:
+    """Pengelolaan emiten, sumber berita, dan akun (SRS FR-8, UC-06)."""
+    if pengguna.peran is not Peran.ADMIN:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "perlu peran admin")
     return pengguna

@@ -25,6 +25,7 @@ import traceback
 from datetime import datetime, timezone
 from pathlib import Path
 
+from app.analitik.notifikasi import periksa_watchlist
 from app.database import SessionLocal
 from app.ingest.pengaya import perkaya_sampai_habis
 from app.ingest.pipeline import jalankan_siklus
@@ -97,6 +98,16 @@ def main() -> None:
     except Exception:
         gagal.append("klasifikasi")
         catat("klasifikasi: GAGAL\n" + traceback.format_exc())
+
+    # 4. notifikasi watchlist — setelah label baru ada, supaya ikut terhitung
+    try:
+        with SessionLocal() as session:
+            baru = periksa_watchlist(session)
+            session.commit()
+        catat(f"notifikasi : {len(baru)} baru")
+    except Exception:
+        gagal.append("notifikasi")
+        catat("notifikasi : GAGAL\n" + traceback.format_exc())
 
     if gagal:
         catat(f"=== siklus selesai dengan kegagalan: {', '.join(gagal)} ===")

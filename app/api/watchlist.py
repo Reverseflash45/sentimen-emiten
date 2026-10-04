@@ -53,6 +53,7 @@ def _rakit(session: Session, w: Watchlist, emiten: Emiten) -> ItemWatchlist:
         tanggal_skor=terakhir.tanggal if terakhir else None,
         berita_7_hari=sum(s.jumlah_berita for s in skor),
         harga_terakhir=harga.penutupan if harga else None,
+        ambang=w.ambang,
     )
 
 
@@ -77,19 +78,25 @@ def tambah(
     session: Session = Depends(get_session),
 ) -> ItemWatchlist:
     emiten = ambil_emiten(session, badan.kode_emiten)
+    if not emiten.aktif:
+        # SRS UC-02 3a: emiten di luar cakupan LQ45 periode ini ditolak
+        raise HTTPException(400, f"{emiten.kode} tidak lagi dipantau (di luar cakupan LQ45)")
     ada = session.scalar(
         select(Watchlist).where(
             Watchlist.pengguna_id == pengguna.id, Watchlist.emiten_id == emiten.id
         )
     )
     if ada is not None:
-        # menambahkan yang sudah ada bukan galat — catatannya saja yang diperbarui
+        # menambahkan yang sudah ada bukan galat — catatan dan ambangnya diperbarui
         if badan.catatan is not None:
             ada.catatan = badan.catatan
-            session.commit()
+        if badan.ambang is not None:
+            ada.ambang = badan.ambang
+        session.commit()
         return _rakit(session, ada, emiten)
 
-    baru = Watchlist(pengguna_id=pengguna.id, emiten_id=emiten.id, catatan=badan.catatan)
+    baru = Watchlist(pengguna_id=pengguna.id, emiten_id=emiten.id, catatan=badan.catatan,
+                     ambang=badan.ambang if badan.ambang is not None else 0.3)
     session.add(baru)
     session.commit()
     return _rakit(session, baru, emiten)

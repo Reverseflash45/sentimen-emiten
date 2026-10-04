@@ -13,10 +13,12 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from app.api import admin as router_admin
 from app.api import analis as router_analis
 from app.api import auth as router_auth
 from app.api import berita as router_berita
 from app.api import emiten as router_emiten
+from app.api import notifikasi as router_notifikasi
 from app.api import peringkat as router_peringkat
 from app.api import sistem as router_sistem
 from app.api import watchlist as router_watchlist
@@ -39,6 +41,8 @@ app.include_router(router_emiten.router)
 app.include_router(router_peringkat.router)
 app.include_router(router_berita.router)
 app.include_router(router_analis.router)
+app.include_router(router_notifikasi.router)
+app.include_router(router_admin.router)
 
 if STATIS.is_dir():
     app.mount("/statis", StaticFiles(directory=STATIS), name="statis")
