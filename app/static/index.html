@@ -5,56 +5,189 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Sentimen Emiten — Analisis Sentimen Berita Saham LQ45</title>
 <meta name="description" content="Dasbor riset: sentimen berita 45 emiten LQ45 dari portal berita Indonesia, disandingkan dengan pergerakan harga saham." />
-<meta name="theme-color" content="#07080a" />
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2307080a'/%3E%3Cpath d='M12 42l12-12 9 8 19-19' fill='none' stroke='%235eead4' stroke-width='6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
+<meta name="color-scheme" content="light dark" />
+<meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)" />
+<meta name="theme-color" content="#151514" media="(prefers-color-scheme: dark)" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%231a1a19'/%3E%3Cpath d='M14 40h8V28h-8zM28 40h8V18h-8zM42 40h8V32h-8z' fill='%23f7f6f3'/%3E%3C/svg%3E" />
 <link rel="stylesheet" href="/statis/gaya.css" />
 </head>
 <body data-peran="tamu">
 <header class="bar">
-  <a class="brand" href="/">
-    <span class="logo" aria-hidden="true">
-      <svg viewBox="0 0 24 24"><path d="M3 16l5-5 4 3.5L21 6" /></svg>
-    </span>
+  <a class="merek" href="/">
+    <svg class="lambang" viewBox="0 0 20 20" aria-hidden="true"><path d="M3 15h3V9H3zM8.5 15h3V4h-3zM14 15h3v-4h-3z" /></svg>
     <span>Sentimen Emiten</span>
-    <span class="tanda">LQ45</span>
   </a>
+
+  <div class="cari-emiten">
+    <svg class="ikon-cari" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
+    <input id="cari" type="text" role="combobox" autocomplete="off" spellcheck="false"
+           aria-label="Cari emiten" aria-autocomplete="list" aria-controls="saran" aria-expanded="false"
+           placeholder="Cari emiten — BBCA, Telkom, tambang" />
+    <kbd class="pintas" aria-hidden="true">/</kbd>
+    <ul id="saran" class="saran" role="listbox" hidden></ul>
+  </div>
+
   <nav class="akun">
+    <div class="tampilan" id="pilih-tampilan" role="tablist" aria-label="Tampilan" hidden>
+      <button role="tab" class="aktif" data-tampilan="pasar" aria-selected="true">Pasar</button>
+      <button role="tab" data-tampilan="analis" aria-selected="false">Tinjauan <span class="jumlah" id="jumlah-tinjau"></span></button>
+    </div>
     <a class="tautan-api" href="/docs" target="_blank" rel="noreferrer">API</a>
     <span class="chip-akun" id="chip-akun" hidden>
       <span class="avatar" id="avatar"></span>
       <span class="akun-teks"><b id="nama-akun"></b><span id="peran-akun"></span></span>
     </span>
-    <button id="tombol-masuk" class="tombol garis">Masuk</button>
+    <button id="tombol-masuk" class="tombol garis kecil">Masuk</button>
   </nav>
 </header>
 
+<div class="status">
+  <p class="status-isi">
+    <span id="ringkasan"><span class="redup">Memuat ringkasan…</span></span>
+    <span class="status-cakupan redup" id="cakupan-data"></span>
+  </p>
+</div>
+
 <main>
-  <section class="pembuka">
-    <p class="alis" id="alis">Riset · Analisis sentimen berita</p>
-    <h1 id="judul-utama">Apa kata berita tentang <span class="sorot">saham LQ45</span>?</h1>
-    <p class="lead" id="lead">
-      Berita dari portal-portal Indonesia dikumpulkan setiap hari, dipetakan ke emitennya,
-      dilabeli <b class="teks-pos">positif</b>, <b class="teks-net">netral</b>, atau
-      <b class="teks-neg">negatif</b>, lalu disandingkan dengan pergerakan harga sahamnya.
-    </p>
-    <div class="kartu-baris" id="ringkasan"></div>
-    <div class="teraktif" id="teraktif" hidden>
-      <span class="ket">Paling sering diberitakan:</span>
-      <div class="chip-baris" id="chip-teraktif"></div>
+  <!-- ===== tampilan pasar (semua peran) ===== -->
+  <div id="tampilan-pasar">
+    <div class="toolbar">
+      <div class="segmen" id="pintasan" role="group" aria-label="Rentang waktu">
+        <button data-hari="7">7H</button>
+        <button data-hari="30">1B</button>
+        <button data-hari="90">3B</button>
+        <button data-hari="365">1T</button>
+        <button data-ytd="1">YTD</button>
+        <button data-semua="1">Semua</button>
+        <button data-kustom="1">Kustom</button>
+      </div>
+
+      <div class="kustom" id="kustom" hidden>
+        <label>Dari <input type="date" id="mulai" /></label>
+        <label>Sampai <input type="date" id="sampai" /></label>
+        <button id="terapkan-kustom" class="tombol kecil">Terapkan</button>
+      </div>
+
+      <details class="lanjutan">
+        <summary>
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 6h9M15 6h2M3 14h2M8 14h9" /><circle cx="13.5" cy="6" r="1.8" /><circle cx="6.5" cy="14" r="1.8" /></svg>
+          Pengaturan analisis
+        </summary>
+        <div class="lanjutan-isi">
+          <label title="Menggeser sentimen beberapa hari ke depan sebelum dikorelasikan dengan harga.">Lag sentimen terhadap harga
+            <select id="lag"><option value="0">0 hari</option><option value="1">1 hari</option><option value="2">2 hari</option><option value="3">3 hari</option><option value="5">5 hari</option></select>
+          </label>
+          <label title="Membuang berita yang menyebut lebih banyak emiten dari ini. Dipakai untuk menguji apakah sinyalnya bertahan tanpa artikel rekap pasar.">Maks emiten per berita
+            <select id="maks-emiten">
+              <option value="">Semua berita</option>
+              <option value="1">1 (tanpa rekap)</option>
+              <option value="2">2</option>
+              <option value="3">3</option>
+              <option value="5">5</option>
+            </select>
+          </label>
+          <p class="ket">Lag dipakai untuk korelasi. Batas emiten per berita berlaku untuk peringkat dan korelasi.</p>
+        </div>
+      </details>
     </div>
-  </section>
+    <p class="galat" id="galat" hidden></p>
+
+    <!-- ===== pengguna & analis ===== -->
+    <section class="watchlist" id="panel-watchlist" hidden>
+      <h2 class="judul-bagian">Watchlist <span class="redup">· skor &amp; berita 7 hari</span></h2>
+      <div class="grid-watchlist" id="watchlist"></div>
+    </section>
+
+    <div class="tata">
+      <aside class="daftar" id="panel-peringkat" aria-label="Peringkat sentimen">
+        <div class="kepala-daftar">
+          <h2 class="judul-bagian">Peringkat sentimen</h2>
+          <div class="saring">
+            <input type="search" id="cari-tabel" placeholder="Saring…" aria-label="Saring tabel" />
+            <label class="sebaris">
+              <input type="checkbox" id="hanya-berberita" checked />
+              Ada berita
+            </label>
+          </div>
+        </div>
+        <div id="peringkat" class="tabel-bungkus"><p class="ket memuat">Memuat…</p></div>
+      </aside>
+
+      <div class="sisi-detail">
+        <div class="detail-kosong" id="detail-kosong">
+          <p class="judul-kosong">Pilih emiten dari daftar atau kotak pencarian.</p>
+          <div class="teraktif" id="teraktif" hidden>
+            <span class="ket">Paling sering diberitakan pada data terkumpul</span>
+            <div class="chip-baris" id="chip-teraktif"></div>
+          </div>
+        </div>
+
+        <section class="detail" id="panel-grafik" hidden>
+          <div class="kepala-detail">
+            <div>
+              <h1 class="kode-besar" id="kode-emiten"></h1>
+              <p class="nama-emiten" id="judul-emiten"></p>
+            </div>
+            <div class="aksi-detail">
+              <button class="tombol garis kecil pantau" id="tombol-pantau" hidden aria-pressed="false">Pantau</button>
+              <button class="tutup" id="tutup-detail" aria-label="Tutup detail">
+                <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 5l10 10M15 5L5 15" /></svg>
+              </button>
+            </div>
+          </div>
+          <div class="metrik" id="metrik"></div>
+
+          <div class="kepala-grafik">
+            <span class="ket" id="keterangan-periode"></span>
+            <div class="segmen kecil" id="satuan" role="group" aria-label="Satuan waktu grafik">
+              <button data-satuan="harian">Hari</button>
+              <button data-satuan="mingguan">Minggu</button>
+              <button data-satuan="bulanan">Bulan</button>
+              <button data-satuan="tahunan">Tahun</button>
+            </div>
+          </div>
+          <div class="grafik" id="grafik"></div>
+          <p class="catatan" id="catatan-grafik" hidden></p>
+
+          <h3 class="subjudul">Korelasi sentimen dengan imbal hasil harian</h3>
+          <div id="korelasi" class="korelasi"></div>
+        </section>
+
+        <section class="berita-bagian" id="panel-berita" hidden>
+          <div class="kepala-berita">
+            <h3 class="subjudul">Berita terkait</h3>
+            <div class="saring">
+              <select id="saring-sentimen" aria-label="Saring sentimen">
+                <option value="">Semua sentimen</option>
+                <option value="positif">Positif</option>
+                <option value="netral">Netral</option>
+                <option value="negatif">Negatif</option>
+              </select>
+              <select id="saring-status" aria-label="Saring status verifikasi">
+                <option value="">Semua status</option>
+                <option value="terkonfirmasi_resmi">Terkonfirmasi resmi</option>
+                <option value="rumor_belum_terkonfirmasi">Rumor</option>
+                <option value="belum_diperiksa">Belum diperiksa</option>
+              </select>
+            </div>
+          </div>
+          <div id="berita"><p class="ket memuat">Memuat…</p></div>
+        </section>
+      </div>
+    </div>
+  </div>
 
   <!-- ===== analis ===== -->
-  <section class="panel ruang-analis" id="panel-analis" hidden>
-    <div class="kepala-panel">
+  <section class="ruang-analis" id="panel-analis" hidden>
+    <div class="kepala-analis">
       <div>
-        <p class="alis kecil">Ruang kerja analis</p>
-        <h2>Tinjau keputusan model</h2>
-        <p class="ket">Label model yang paling ragu ditampilkan lebih dulu — di situ koreksi manusia paling bernilai.</p>
+        <h1 class="judul-halaman">Tinjau keputusan model</h1>
+        <p class="ket">Label yang paling diragukan model tampil lebih dulu — di situ koreksi manusia paling bernilai.
+          Koreksi dipakai untuk melatih ulang model, tidak untuk mengujinya.</p>
       </div>
       <div class="segmen" role="tablist" aria-label="Tugas analis">
-        <button role="tab" class="aktif" data-tab="label">Tinjau label <span class="jumlah" id="jumlah-antrean"></span></button>
-        <button role="tab" data-tab="verifikasi">Verifikasi berita <span class="jumlah" id="jumlah-verifikasi"></span></button>
+        <button role="tab" class="aktif" data-tab="label">Label <span class="jumlah" id="jumlah-antrean"></span></button>
+        <button role="tab" data-tab="verifikasi">Verifikasi <span class="jumlah" id="jumlah-verifikasi"></span></button>
       </div>
     </div>
     <div class="statistik-analis" id="statistik-analis"></div>
@@ -82,156 +215,28 @@
       <div id="daftar-verifikasi"></div>
     </div>
   </section>
-
-  <!-- ===== pengguna & analis ===== -->
-  <section class="panel" id="panel-watchlist" hidden>
-    <div class="kepala-panel">
-      <div>
-        <h2>Watchlist saya</h2>
-        <p class="ket">Skor dan jumlah berita 7 hari terakhir. Tambah emiten dengan tombol ☆ di panel detail.</p>
-      </div>
-    </div>
-    <div class="grid-watchlist" id="watchlist"></div>
-  </section>
-
-  <section class="panel kontrol">
-    <div class="kendali utama">
-      <div class="kolom lebar">
-        <label class="label-kecil" for="cari">Emiten</label>
-        <div class="cari-emiten">
-          <svg class="ikon-cari" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
-          <input id="cari" type="text" role="combobox" autocomplete="off" spellcheck="false"
-                 aria-autocomplete="list" aria-controls="saran" aria-expanded="false"
-                 placeholder="Cari kode atau nama — mis. BBCA, Telkom, tambang" />
-          <kbd class="pintas" aria-hidden="true">/</kbd>
-          <ul id="saran" class="saran" role="listbox" hidden></ul>
-        </div>
-      </div>
-      <div class="kolom">
-        <span class="label-kecil">Rentang</span>
-        <div class="segmen" id="pintasan" role="group" aria-label="Rentang waktu">
-          <button data-hari="7">7H</button>
-          <button data-hari="30">1B</button>
-          <button data-hari="90">3B</button>
-          <button data-hari="365">1T</button>
-          <button data-ytd="1">YTD</button>
-          <button data-semua="1">Semua</button>
-          <button data-kustom="1">Kustom</button>
-        </div>
-      </div>
-    </div>
-
-    <div class="kustom" id="kustom" hidden>
-      <label>Dari <input type="date" id="mulai" /></label>
-      <span class="panah" aria-hidden="true">→</span>
-      <label>Sampai <input type="date" id="sampai" /></label>
-      <button id="terapkan-kustom" class="tombol kecil">Terapkan</button>
-    </div>
-
-    <details class="lanjutan">
-      <summary>Pengaturan analisis</summary>
-      <div class="kendali">
-        <label title="Menggeser sentimen beberapa hari ke depan sebelum dikorelasikan dengan harga.">Lag (hari)
-          <select id="lag"><option>0</option><option>1</option><option>2</option><option>3</option><option>5</option></select>
-        </label>
-        <label title="Membuang berita yang menyebut lebih banyak emiten dari ini. Dipakai untuk menguji apakah sinyalnya bertahan tanpa artikel rekap pasar.">Maks emiten per berita
-          <select id="maks-emiten">
-            <option value="">Semua berita</option>
-            <option value="1">1 (tanpa rekap)</option>
-            <option value="2">2</option>
-            <option value="3">3</option>
-            <option value="5">5</option>
-          </select>
-        </label>
-      </div>
-    </details>
-
-    <p class="galat" id="galat" hidden></p>
-    <p class="ket" id="cakupan-data"></p>
-  </section>
-
-  <section class="panel detail" id="panel-grafik" hidden>
-    <div class="kepala-detail">
-      <div>
-        <div class="kode-besar" id="kode-emiten"></div>
-        <h2 id="judul-emiten"></h2>
-      </div>
-      <div class="aksi-detail">
-        <button class="tombol garis kecil pantau" id="tombol-pantau" hidden aria-pressed="false">☆ Pantau</button>
-        <button class="tutup" id="tutup-detail" aria-label="Tutup detail">✕</button>
-      </div>
-    </div>
-    <div class="metrik" id="metrik"></div>
-    <div class="kepala-grafik">
-      <span class="ket" id="keterangan-periode"></span>
-      <div class="segmen kecil" id="satuan" role="group" aria-label="Satuan waktu grafik">
-        <button data-satuan="harian">Hari</button>
-        <button data-satuan="mingguan">Minggu</button>
-        <button data-satuan="bulanan">Bulan</button>
-        <button data-satuan="tahunan">Tahun</button>
-      </div>
-    </div>
-    <div class="grafik" id="grafik"></div>
-    <p class="ket catatan" id="catatan-grafik" hidden></p>
-    <h3 class="subjudul">Korelasi sentimen dan harga <span class="redup">(harian)</span></h3>
-    <div id="korelasi" class="korelasi"></div>
-  </section>
-
-  <section class="panel" id="panel-berita" hidden>
-    <div class="kepala-panel">
-      <h2>Berita terkait</h2>
-      <div class="saring">
-        <select id="saring-sentimen" aria-label="Saring sentimen">
-          <option value="">Semua sentimen</option>
-          <option value="positif">Positif</option>
-          <option value="netral">Netral</option>
-          <option value="negatif">Negatif</option>
-        </select>
-        <select id="saring-status" aria-label="Saring status verifikasi">
-          <option value="">Semua status</option>
-          <option value="terkonfirmasi_resmi">Terkonfirmasi resmi</option>
-          <option value="rumor_belum_terkonfirmasi">Rumor</option>
-          <option value="belum_diperiksa">Belum diperiksa</option>
-        </select>
-      </div>
-    </div>
-    <div id="berita"><p class="ket memuat">Memuat…</p></div>
-  </section>
-
-  <section class="panel" id="panel-peringkat">
-    <div class="kepala-panel">
-      <div>
-        <h2>Peringkat sentimen</h2>
-        <p class="ket">Klik baris untuk melihat grafik dan beritanya. Klik judul kolom untuk mengurutkan.</p>
-      </div>
-      <div class="saring">
-        <input type="search" id="cari-tabel" placeholder="Saring tabel…" aria-label="Saring tabel" />
-        <label class="sebaris">
-          <input type="checkbox" id="hanya-berberita" checked />
-          Hanya yang ada beritanya
-        </label>
-      </div>
-    </div>
-    <div id="peringkat" class="tabel-bungkus"><p class="ket memuat">Memuat…</p></div>
-  </section>
 </main>
 
 <footer>
   <p>Sistem menyajikan hubungan korelatif, bukan prediksi harga. Keputusan investasi tetap ada pada pengguna.</p>
-  <p class="redup">Dibuat oleh <a href="https://www.raffstw.my.id" target="_blank" rel="noreferrer">Rafi Fernandito Setiawan</a> · FastAPI + PostgreSQL</p>
+  <p>Rafi Fernandito Setiawan · D4 Teknik Informatika, Universitas Airlangga ·
+    <a href="https://www.raffstw.my.id" target="_blank" rel="noreferrer">raffstw.my.id</a></p>
 </footer>
 
 <dialog class="dialog-masuk" id="dialog-masuk" aria-labelledby="judul-masuk">
   <form method="dialog" id="form-masuk">
-    <button type="button" class="tutup" id="tutup-masuk" aria-label="Tutup">✕</button>
-    <span class="logo besar" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 16l5-5 4 3.5L21 6" /></svg></span>
-    <h2 id="judul-masuk">Masuk ke Sentimen Emiten</h2>
+    <div class="kepala-dialog">
+      <h2 id="judul-masuk">Masuk</h2>
+      <button type="button" class="tutup" id="tutup-masuk" aria-label="Tutup">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 5l10 10M15 5L5 15" /></svg>
+      </button>
+    </div>
     <p class="ket">Pengguna mengelola watchlist. Analis meninjau label model dan status verifikasi berita.</p>
     <label>Email <input id="masuk-email" type="email" autocomplete="username" required /></label>
     <label>Kata sandi <input id="masuk-sandi" type="password" autocomplete="current-password" required /></label>
     <p class="galat" id="galat-masuk" hidden></p>
     <button type="submit" class="tombol" id="kirim-masuk">Masuk</button>
-    <p class="ket kecil">Sesi hanya bertahan selama tab ini terbuka.</p>
+    <p class="ket">Sesi hanya bertahan selama tab ini terbuka.</p>
   </form>
 </dialog>
 

@@ -65,6 +65,16 @@ function toast(pesan, jenis = "sukses") {
   tundaToast = setTimeout(() => { t.hidden = true; }, 2600);
 }
 
+const layarLebar = () => window.matchMedia("(min-width: 1081px)").matches;
+
+function ikon(d) {
+  const s = svgEl("svg", { viewBox: "0 0 20 20", "aria-hidden": "true" });
+  s.append(svgEl("path", { d }));
+  return s;
+}
+const ikonBintang = () => ikon("M10 2.8l2.2 4.6 5 .7-3.6 3.5.9 5-4.5-2.4-4.5 2.4.9-5L2.8 8.1l5-.7z");
+const ikonSilang = () => ikon("M5 5l10 10M15 5L5 15");
+
 function kosong(judul, penjelasan) {
   return el("div", { class: "kosong" }, [el("strong", {}, judul), el("span", {}, penjelasan)]);
 }
@@ -78,21 +88,19 @@ function memuat(wadah, teks = "Memuat…") {
 
 async function muatRingkasan() {
   const r = await ambil("/api/ringkasan");
-  const kartu = [
-    ["Emiten dipantau", r.jumlah_emiten],
-    ["Berita terkumpul", r.jumlah_berita],
-    ["Sudah berlabel", r.jumlah_berlabel],
-    ["Sumber berita", r.jumlah_sumber],
+  const bagian = [
+    [r.jumlah_emiten, "emiten LQ45"],
+    [r.jumlah_berita, "berita"],
+    [r.jumlah_berlabel, "berlabel"],
+    [r.jumlah_sumber, "portal"],
   ];
   const wadah = $("#ringkasan");
   wadah.innerHTML = "";
-  for (const [label, angka] of kartu) {
-    wadah.append(el("div", { class: "kartu" }, [
-      el("div", { class: "angka" }, fmtAngka(angka)),
-      el("div", { class: "label" }, label),
-    ]));
-  }
-  const aktif = (r.emiten_teraktif || []).slice(0, 6);
+  bagian.forEach(([angka, label], i) => {
+    if (i) wadah.append(el("span", { class: "pisah", "aria-hidden": "true" }, "/"));
+    wadah.append(el("span", {}, [el("b", {}, fmtAngka(angka)), ` ${label}`]));
+  });
+  const aktif = (r.emiten_teraktif || []).slice(0, 8);
   if (aktif.length) {
     const baris = $("#chip-teraktif");
     baris.innerHTML = "";
@@ -103,6 +111,7 @@ async function muatRingkasan() {
     }
     $("#teraktif").hidden = false;
   }
+  return r;
 }
 
 /* ---------- pencarian emiten (combobox) ---------- */
@@ -277,8 +286,10 @@ const svgEl = (t, a = {}) => {
   for (const [k, v] of Object.entries(a)) n.setAttribute(k, v);
   return n;
 };
+/* Warna grafik diatur lewat kelas di gaya.css, bukan atribut, supaya grafik
+   ikut berganti saat tema terang/gelap berganti. */
 const teksSvg = (isi, a) => {
-  const t = svgEl("text", { fill: "#8b919c", "font-size": "11", "font-family": "inherit", ...a });
+  const t = svgEl("text", { class: "sumbu", "font-family": "inherit", ...a });
   t.textContent = isi;
   return t;
 };
@@ -339,35 +350,28 @@ function gambarGrafik() {
     viewBox: `0 0 ${W} ${H}`, width: W, height: H, role: "img",
     "aria-label": `Grafik harga penutupan dan skor sentimen ${NAMA_SATUAN[satuan]}`,
   });
-  const defs = svgEl("defs");
-  const grad = svgEl("linearGradient", { id: "isi-harga", x1: "0", y1: "0", x2: "0", y2: "1" });
-  grad.append(svgEl("stop", { offset: "0%", "stop-color": "#5eead4", "stop-opacity": "0.28" }));
-  grad.append(svgEl("stop", { offset: "100%", "stop-color": "#5eead4", "stop-opacity": "0" }));
-  defs.append(grad);
-  svg.append(defs);
-
   // --- panel harga ---
   const atas1 = P.atas;
   svg.append(teksSvg(satuan === "harian" ? "Harga penutupan (Rp)" : "Harga penutupan akhir periode (Rp)",
-    { x: P.kiri, y: atas1 - 12, fill: "#e8eaed", "font-size": "12", "font-weight": "600" }));
+    { x: P.kiri, y: atas1 - 12, class: "judul-panel" }));
   const nilaiHarga = harga.map((d) => d.penutupan);
   let yHarga = null;
   if (nilaiHarga.length) {
     const s = sumbuHarga(Math.min(...nilaiHarga), Math.max(...nilaiHarga));
     yHarga = (v) => atas1 + H1 - ((v - s.bawah) / (s.atas - s.bawah)) * H1;
     for (const v of s.tik) {
-      svg.append(svgEl("line", { x1: P.kiri, x2: P.kiri + lebar, y1: yHarga(v), y2: yHarga(v), stroke: "#1d2128" }));
+      svg.append(svgEl("line", { x1: P.kiri, x2: P.kiri + lebar, y1: yHarga(v), y2: yHarga(v), class: "kisi" }));
       svg.append(teksSvg(fmtAngka(Math.round(v)), { x: P.kiri - 8, y: yHarga(v) + 4, "text-anchor": "end" }));
     }
     const titik = tanggal.filter((t) => petaHarga.has(t)).map((t) => [x(indeks.get(t)), yHarga(petaHarga.get(t).penutupan)]);
     if (titik.length > 1) {
       const garis = titik.map(([a, b], i) => `${i ? "L" : "M"}${a.toFixed(1)},${b.toFixed(1)}`).join(" ");
       const dasar = (atas1 + H1).toFixed(1);
-      svg.append(svgEl("path", { d: `${garis} L${titik.at(-1)[0].toFixed(1)},${dasar} L${titik[0][0].toFixed(1)},${dasar} Z`, fill: "url(#isi-harga)" }));
-      svg.append(svgEl("path", { d: garis, fill: "none", stroke: "#5eead4", "stroke-width": "2", "stroke-linejoin": "round", "stroke-linecap": "round" }));
+      svg.append(svgEl("path", { d: `${garis} L${titik.at(-1)[0].toFixed(1)},${dasar} L${titik[0][0].toFixed(1)},${dasar} Z`, class: "area-harga" }));
+      svg.append(svgEl("path", { d: garis, class: "garis-harga" }));
     }
     if (titik.length <= 12) {
-      for (const [a, b] of titik) svg.append(svgEl("circle", { cx: a, cy: b, r: 3.5, fill: "#5eead4" }));
+      for (const [a, b] of titik) svg.append(svgEl("circle", { cx: a, cy: b, r: 3, class: "titik-harga" }));
     }
   } else {
     svg.append(teksSvg("Belum ada data harga pada rentang ini", { x: P.kiri + lebar / 2, y: atas1 + H1 / 2, "text-anchor": "middle" }));
@@ -376,11 +380,11 @@ function gambarGrafik() {
   // --- panel sentimen ---
   const atas2 = atas1 + H1 + JARAK;
   const ySent = (v) => atas2 + H2 / 2 - (v * H2) / 2;
-  svg.append(teksSvg(`Skor sentimen ${NAMA_SATUAN[satuan]} (−1 s/d +1)`, { x: P.kiri, y: atas2 - 12, fill: "#e8eaed", "font-size": "12", "font-weight": "600" }));
+  svg.append(teksSvg(`Skor sentimen ${NAMA_SATUAN[satuan]} (−1 s/d +1)`, { x: P.kiri, y: atas2 - 12, class: "judul-panel" }));
   for (const v of [1, 0, -1]) {
     svg.append(svgEl("line", {
       x1: P.kiri, x2: P.kiri + lebar, y1: ySent(v), y2: ySent(v),
-      stroke: v === 0 ? "#2a3039" : "#1d2128", ...(v === 0 ? {} : { "stroke-dasharray": "3 4" }),
+      class: v === 0 ? "kisi-nol" : "kisi", ...(v === 0 ? {} : { "stroke-dasharray": "3 4" }),
     }));
     svg.append(teksSvg(v === 0 ? "0" : fmtSkor(v).replace(".00", ""), { x: P.kiri - 8, y: ySent(v) + 4, "text-anchor": "end" }));
   }
@@ -391,8 +395,9 @@ function gambarGrafik() {
     const tinggi = Math.max(2, Math.abs(ySent(d.skor) - y0));
     const r = svgEl("rect", {
       x: cx - lebarBatang / 2, y: d.skor >= 0 ? y0 - tinggi : y0, width: lebarBatang, height: tinggi,
-      rx: Math.min(3, lebarBatang / 2), fill: warnaSkor(d.skor),
+      rx: Math.min(1.5, lebarBatang / 2),
     });
+    r.style.fill = warnaSkor(d.skor);
     batang.set(d.tanggal, r);
     svg.append(r);
   }
@@ -412,8 +417,8 @@ function gambarGrafik() {
   });
 
   // --- lapisan sorot (hover / sentuh) ---
-  const garisSorot = svgEl("line", { y1: atas1, y2: atas2 + H2, stroke: "#8b919c", "stroke-width": "1", "stroke-dasharray": "3 3", visibility: "hidden" });
-  const titikSorot = svgEl("circle", { r: 5, fill: "#07080a", stroke: "#5eead4", "stroke-width": "2.5", visibility: "hidden" });
+  const garisSorot = svgEl("line", { y1: atas1, y2: atas2 + H2, class: "garis-sorot", visibility: "hidden" });
+  const titikSorot = svgEl("circle", { r: 4.5, class: "titik-sorot", visibility: "hidden" });
   svg.append(garisSorot, titikSorot);
   const tangkap = svgEl("rect", { x: P.kiri - 6, y: atas1 - 6, width: lebar + 12, height: atas2 + H2 - atas1 + 12, fill: "transparent" });
   svg.append(tangkap);
@@ -438,7 +443,7 @@ function gambarGrafik() {
       titikSorot.setAttribute("visibility", "hidden");
     }
     if (aktif !== t) {
-      for (const [tg, r] of batang) r.setAttribute("opacity", tg === t ? "1" : "0.45");
+      for (const [tg, r] of batang) r.setAttribute("opacity", tg === t ? "1" : "0.35");
       aktif = t;
     }
     const s = petaSent.get(t);
@@ -539,7 +544,8 @@ function tampilkanKorelasi(k) {
 
 function lencanaLabel(label) {
   if (!label) return el("span", { class: "lencana kosong" }, "belum dilabeli");
-  return el("span", { class: `lencana ${label.sentimen}` }, `${label.sentimen} ${(label.keyakinan * 100).toFixed(0)}%`);
+  return el("span", { class: `lencana ${label.sentimen}`, title: "keyakinan model" },
+    [label.sentimen, el("span", { class: "yakin" }, `${(label.keyakinan * 100).toFixed(0)}%`)]);
 }
 
 const NAMA_STATUS = {
@@ -588,14 +594,17 @@ async function muatBerita() {
       "Longgarkan saringan sentimen atau status, atau perlebar rentang tanggalnya."));
     return;
   }
-  for (const b of daftar) {
+  /* Delapan dulu: daftar 30 berita yang dibuka penuh membuat halaman
+     memanjang dan grafik hilang dari pandangan. Sisanya satu klik. */
+  const AWAL = 8;
+  daftar.forEach((b, urutan) => {
     const tgl = b.terbit_pada
       ? new Date(b.terbit_pada).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })
       : "tanggal tidak diketahui";
     const aksi = el("div", { class: "aksi" });
     if (state.saya?.peran === "analis") {
       for (const sent of ["positif", "netral", "negatif"]) {
-        const tombol = el("button", {}, `koreksi: ${sent}`);
+        const tombol = el("button", {}, `Koreksi → ${sent}`);
         tombol.onclick = async () => {
           tombol.disabled = true;
           try {
@@ -619,16 +628,26 @@ async function muatBerita() {
       el("a", { class: "judul", href: b.url, target: "_blank", rel: "noreferrer" }, b.judul),
       el("div", { class: "meta" }, [
         lencanaLabel(b.label),
-        b.label && b.label.asal === "analis" ? el("span", { class: "lencana analis" }, "ditinjau analis") : null,
+        b.label && b.label.asal === "analis" ? el("span", { class: "lencana analis" }, "ditinjau") : null,
         el("span", {}, b.sumber),
         el("span", {}, tgl),
         el("span", {}, NAMA_STATUS[b.status_verifikasi] || b.status_verifikasi),
-        b.emiten.length > 1 ? el("span", {}, b.emiten.join(", ")) : null,
+        b.emiten.length > 1 ? el("span", { title: b.emiten.join(", ") }, `${b.emiten.length} emiten`) : null,
       ]),
       aksi,
       jejak,
     ]);
-    wadah.append(el("div", { class: `berita-item ${b.label ? b.label.sentimen : ""}` }, [el("span", { class: "strip" }), isi]));
+    const item = el("div", { class: "berita-item" }, isi);
+    if (urutan >= AWAL) item.hidden = true;
+    wadah.append(item);
+  });
+  if (daftar.length > AWAL) {
+    const lebih = el("button", { class: "tombol garis kecil lebih-banyak" }, `Tampilkan ${daftar.length - AWAL} berita lainnya`);
+    lebih.onclick = () => {
+      for (const x of wadah.querySelectorAll(".berita-item[hidden]")) x.hidden = false;
+      lebih.remove();
+    };
+    wadah.append(lebih);
   }
 }
 
@@ -708,7 +727,7 @@ function gambarPeringkat() {
     const tr = el("tr", { tabindex: "0", role: "button", "aria-label": `Lihat detail ${b.kode}` });
     if (b.kode === state.kode) tr.className = "terpilih";
     tr.append(el("td", { class: "kiri emiten" }, [
-      el("div", { class: "kode" }, [b.kode, state.watchlist.has(b.kode) ? " ★" : ""]),
+      el("div", { class: "kode" }, [b.kode, state.watchlist.has(b.kode) ? ikonBintang() : null]),
       el("div", { class: "nama" }, b.nama),
     ]));
     tr.append(el("td", { class: "kiri opsional redup" }, b.sektor || "—"));
@@ -746,12 +765,18 @@ async function muatPeringkat() {
 
 /* ---------- akun ---------- */
 
-const PERAN = {
-  pengguna: { label: "Pengguna", alis: "Beranda pengguna",
-              lead: "Pantau emiten pilihanmu di watchlist. Cari emiten, lalu tekan ☆ Pantau di panel detail." },
-  analis: { label: "Analis", alis: "Beranda analis",
-            lead: "Tinjau label yang paling diragukan model, setujui atau koreksi, dan tetapkan status verifikasi berita. Setiap keputusanmu langsung dipakai dasbor." },
-};
+const PERAN = { pengguna: { label: "Pengguna" }, analis: { label: "Analis" } };
+
+function pilihTampilan(nama) {
+  $("#tampilan-pasar").hidden = nama !== "pasar";
+  $("#panel-analis").hidden = nama !== "analis";
+  for (const b of $$("#pilih-tampilan button")) {
+    b.classList.toggle("aktif", b.dataset.tampilan === nama);
+    b.setAttribute("aria-selected", String(b.dataset.tampilan === nama));
+  }
+  $("#tooltip").hidden = true;
+  if (nama === "pasar" && state.grafik) gambarGrafik(); // lebar wadah bisa berubah saat tersembunyi
+}
 
 function perbaruiAkun() {
   const saya = state.saya;
@@ -760,21 +785,14 @@ function perbaruiAkun() {
   $("#chip-akun").hidden = !saya;
   $("#tombol-masuk").textContent = saya ? "Keluar" : "Masuk";
   $("#panel-watchlist").hidden = !saya;
-  $("#panel-analis").hidden = peran !== "analis";
+  $("#pilih-tampilan").hidden = peran !== "analis";
+  if (peran !== "analis") pilihTampilan("pasar");
   $("#tombol-pantau").hidden = !saya;
   if (saya) {
     $("#avatar").textContent = saya.nama.split(/\s+/).map((k) => k[0]).slice(0, 2).join("").toUpperCase();
     $("#nama-akun").textContent = saya.nama.split(/\s+/)[0];
     $("#peran-akun").textContent = PERAN[peran].label;
-    $("#alis").textContent = PERAN[peran].alis;
-    $("#judul-utama").textContent = `Halo, ${saya.nama.split(/\s+/)[0]}.`;
-    $("#lead").textContent = PERAN[peran].lead;
   } else {
-    $("#alis").textContent = "Riset · Analisis sentimen berita";
-    $("#judul-utama").innerHTML = 'Apa kata berita tentang <span class="sorot">saham LQ45</span>?';
-    $("#lead").innerHTML = 'Berita dari portal-portal Indonesia dikumpulkan setiap hari, dipetakan ke emitennya, ' +
-      'dilabeli <b class="teks-pos">positif</b>, <b class="teks-net">netral</b>, atau <b class="teks-neg">negatif</b>, ' +
-      'lalu disandingkan dengan pergerakan harga sahamnya.';
     state.watchlist.clear();
   }
   perbaruiTombolPantau();
@@ -803,7 +821,6 @@ async function kirimMasuk(e) {
     await muatWatchlist();
     if (state.saya.peran === "analis") muatRuangAnalis();
     if (state.kode) muatBerita();
-    window.scrollTo({ top: 0, behavior: "smooth" });
   } catch (err) {
     g.textContent = err.message;
     g.hidden = false;
@@ -833,12 +850,12 @@ async function muatWatchlist() {
   const wadah = $("#watchlist");
   wadah.innerHTML = "";
   if (!daftar.length) {
-    wadah.append(kosong("Watchlist masih kosong", "Cari emiten di bawah, buka detailnya, lalu tekan ☆ Pantau."));
+    wadah.append(kosong("Watchlist masih kosong", "Buka sebuah emiten, lalu tekan Pantau di samping namanya."));
     return;
   }
   for (const w of daftar) {
     const skor = w.skor_terakhir;
-    const hapus = el("button", { class: "hapus", "aria-label": `Hapus ${w.kode} dari watchlist`, title: "Hapus" }, "✕");
+    const hapus = el("button", { class: "hapus", "aria-label": `Hapus ${w.kode} dari watchlist`, title: "Hapus" }, ikonSilang());
     hapus.onclick = async (e) => {
       e.stopPropagation();
       await ubahPantau(w.kode, false);
@@ -852,7 +869,7 @@ async function muatWatchlist() {
       skorEl,
       el("div", { class: "sub-wl" }, w.tanggal_skor ? `skor ${fmtTgl(w.tanggal_skor, { day: "numeric", month: "short" })}` : "belum ada skor"),
       el("div", { class: "bawah" }, [
-        el("span", {}, `${w.berita_7_hari} berita/7h`),
+        el("span", {}, `${w.berita_7_hari} berita`),
         el("span", {}, w.harga_terakhir == null ? "—" : `Rp ${fmtAngka(w.harga_terakhir)}`),
       ]),
     ]);
@@ -866,7 +883,7 @@ function perbaruiTombolPantau() {
   const t = $("#tombol-pantau");
   const aktif = Boolean(state.kode && state.watchlist.has(state.kode));
   t.setAttribute("aria-pressed", String(aktif));
-  t.textContent = aktif ? "★ Dipantau" : "☆ Pantau";
+  t.replaceChildren(ikonBintang(), aktif ? "Dipantau" : "Pantau");
 }
 
 async function ubahPantau(kode, pantau) {
@@ -917,15 +934,16 @@ async function muatStatistikAnalis() {
     for (const a of kelas) {
       const v = s.matriks[m]?.[a] || 0;
       const td = el("td", {}, String(v));
-      const warna = m === a ? "94, 234, 212" : "248, 113, 113";
-      td.style.background = `rgba(${warna}, ${0.06 + (v / maks) * 0.4})`;
+      const warna = m === a ? "var(--positif)" : "var(--negatif)";
+      td.style.background = `color-mix(in srgb, ${warna} ${Math.round(6 + (v / maks) * 34)}%, transparent)`;
       tr.append(td);
     }
     tabel.append(tr);
   }
   wadah.append(el("div", { class: "kotak matriks" }, [el("div", { class: "label" }, "Model vs analis"), tabel]));
-  $("#jumlah-antrean").textContent = s.tersisa ? `(${s.tersisa})` : "";
-  $("#jumlah-verifikasi").textContent = s.verifikasi.belum_diperiksa ? `(${s.verifikasi.belum_diperiksa})` : "";
+  $("#jumlah-antrean").textContent = s.tersisa ? fmtAngka(s.tersisa) : "";
+  $("#jumlah-verifikasi").textContent = s.verifikasi.belum_diperiksa ? fmtAngka(s.verifikasi.belum_diperiksa) : "";
+  $("#jumlah-tinjau").textContent = s.tersisa ? fmtAngka(s.tersisa) : "";
 }
 
 async function muatAntrean(tambah = false) {
@@ -983,7 +1001,7 @@ function kartuTinjau(it) {
       ]),
     ]),
     el("div", { class: "putusan" }, [
-      tombol(`✓ Setuju: ${m.sentimen}`, "setuju", m.sentimen),
+      tombol(`Setuju — ${m.sentimen}`, "setuju", m.sentimen),
       tombol("Positif", "p", "positif"),
       tombol("Netral", "n", "netral"),
       tombol("Negatif", "g", "negatif"),
@@ -1031,7 +1049,7 @@ async function muatVerifikasi() {
         jejak,
       ]),
       el("div", { class: "putusan verif" }, [
-        status !== "terkonfirmasi_resmi" ? tombol("✓ Terkonfirmasi resmi", "p", "terkonfirmasi_resmi") : null,
+        status !== "terkonfirmasi_resmi" ? tombol("Terkonfirmasi resmi", "p", "terkonfirmasi_resmi") : null,
         status !== "rumor_belum_terkonfirmasi" ? tombol("Rumor", "g", "rumor_belum_terkonfirmasi") : null,
         status !== "belum_diperiksa" ? tombol("Belum diperiksa", "n", "belum_diperiksa") : null,
         lihat,
@@ -1080,7 +1098,13 @@ async function muatEmiten({ gulir = false } = {}) {
   const pertamaKali = panel.hidden;
   panel.hidden = false;
   $("#panel-berita").hidden = false;
-  if (gulir || pertamaKali) panel.scrollIntoView({ behavior: "smooth", block: "start" });
+  $("#detail-kosong").hidden = true;
+  /* Layar lebar: detail ada di samping daftar, jadi cukup gulir bila
+     kepalanya sudah lewat ke atas. Layar sempit: detail ada di atas daftar. */
+  const lewat = panel.getBoundingClientRect().top < 0;
+  if ((gulir || pertamaKali) && (lewat || !layarLebar())) {
+    panel.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
   $("#kode-emiten").textContent = kode;
   perbaruiTombolPantau();
   if (!state.grafik) memuat($("#grafik"));
@@ -1125,6 +1149,7 @@ function tutupDetail() {
   $("#cari").value = "";
   $("#panel-grafik").hidden = true;
   $("#panel-berita").hidden = true;
+  $("#detail-kosong").hidden = false;
   $("#tooltip").hidden = true;
   if (state.baris.length) gambarPeringkat();
 }
@@ -1154,9 +1179,9 @@ async function muatCakupanData() {
   }
   const c = state.cakupan;
   if (!c.mulai) return;
-  $("#cakupan-data").textContent =
-    `Data tersedia — berita: ${c.berita_mulai || "—"} s/d ${c.berita_sampai || "—"} · ` +
-    `harga: ${c.harga_mulai || "—"} s/d ${c.harga_sampai || "—"}`;
+  const opsi = { day: "numeric", month: "short", year: "numeric" };
+  const r = (a, b) => (a ? `${fmtTgl(a, opsi)} – ${fmtTgl(b, opsi)}` : "—");
+  $("#cakupan-data").textContent = `Berita ${r(c.berita_mulai, c.berita_sampai)} · Harga ${r(c.harga_mulai, c.harga_sampai)}`;
   $("#mulai").min = $("#sampai").min = c.mulai;
 }
 
@@ -1211,9 +1236,19 @@ function pasangPintasan() {
   };
   $("#saring-sentimen").onchange = muatBerita;
   $("#saring-status").onchange = muatBerita;
+  for (const b of $$("#pilih-tampilan button")) b.onclick = () => pilihTampilan(b.dataset.tampilan);
+  // panel pengaturan menutup sendiri saat klik di luar, seperti menu biasa
+  document.addEventListener("click", (e) => {
+    const d = $(".lanjutan");
+    if (d.open && !d.contains(e.target)) d.open = false;
+  });
   perbaruiAkun();
   try {
-    await Promise.all([muatRingkasan(), muatDaftarEmiten(), muatCakupanData(), muatPeringkat()]);
+    const [ringkasan] = await Promise.all([muatRingkasan(), muatDaftarEmiten(), muatCakupanData(), muatPeringkat()]);
+    /* Layar lebar: kolom detail tidak dibiarkan kosong. Emiten yang paling
+       banyak diberitakan dibuka lebih dulu; daftar di kiri tetap jadi pemilih. */
+    const pertama = ringkasan?.emiten_teraktif?.[0]?.kode;
+    if (layarLebar() && pertama && !state.kode) pilihEmiten(pertama);
   } catch (e) {
     galat(e.message);
   }
