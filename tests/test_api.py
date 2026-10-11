@@ -14,6 +14,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.auth import batas as batas_masuk
 from app.auth.keamanan import hash_kata_sandi
 from app.database import get_session
 from app.main import app
@@ -107,9 +108,11 @@ def klien():
             s.close()
 
     app.dependency_overrides[get_session] = sesi_uji
+    batas_masuk.reset()
     with TestClient(app) as c:
         yield c
     app.dependency_overrides.clear()
+    batas_masuk.reset()
 
 
 RENTANG = {"mulai": "2026-09-01", "sampai": "2026-09-30"}
@@ -698,3 +701,39 @@ def test_header_keamanan_dasar(klien):
     assert r.headers["x-content-type-options"] == "nosniff"
     assert r.headers["x-frame-options"] == "DENY"
     assert r.headers["referrer-policy"] == "strict-origin-when-cross-origin"
+
+
+# ---------- batas percobaan masuk ----------
+def _coba(klien, email, sandi, ip="203.0.113.7"):
+    return klien.post("/api/auth/masuk", json={"email": email, "kata_sandi": sandi}, headers={"x-real-ip": ip})
+
+
+def test_terlalu_banyak_gagal_masuk_ditolak_429(klien):
+    for _ in range(batas_masuk.MAKS_GAGAL):
+        assert _coba(klien, "analis@uji.test", "salah-salah").status_code == 401
+    r = _coba(klien, "analis@uji.test", "rahasia123")
+    assert r.status_code == 429  # sandi benar pun ditolak sampai jendela lewat
+    assert int(r.headers["retry-after"]) > 0
+
+
+def test_batas_per_email_berlaku_dari_ip_lain(klien):
+    for i in range(batas_masuk.MAKS_GAGAL):
+        _coba(klien, "admin@uji.test", "salah-salah", ip=f"198.51.100.{i}")
+    assert _coba(klien, "admin@uji.test", "rahasia123", ip="192.0.2.1").status_code == 429
+
+
+def test_masuk_berhasil_menghapus_hitungan_email(klien):
+    for _ in range(batas_masuk.MAKS_GAGAL - 1):
+        _coba(klien, "biasa@uji.test", "salah-salah", ip="192.0.2.50")
+    assert _coba(klien, "biasa@uji.test", "rahasia123", ip="192.0.2.51").status_code == 200
+    assert _coba(klien, "biasa@uji.test", "salah-salah", ip="192.0.2.52").status_code == 401
+
+
+def test_jendela_batas_bergeser():
+    batas_masuk.reset()
+    kunci = ["ip:uji-jendela"]
+    for _ in range(batas_masuk.MAKS_GAGAL):
+        batas_masuk.catat_gagal(kunci, sekarang=1000.0)
+    assert batas_masuk.sisa_tunggu(kunci, sekarang=1000.0) > 0
+    assert batas_masuk.sisa_tunggu(kunci, sekarang=1000.0 + batas_masuk.JENDELA_DETIK + 1) == 0
+    batas_masuk.reset()
