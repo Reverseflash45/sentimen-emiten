@@ -691,3 +691,10 @@ def test_endpoint_pribadi_dan_penulisan_tidak_di_cache(klien):
     assert "s-maxage" not in r.headers.get("cache-control", "")
     r = klien.get("/api/emiten/TIDAKADA")
     assert "s-maxage" not in r.headers.get("cache-control", "")
+
+
+def test_header_keamanan_dasar(klien):
+    r = klien.get("/api/emiten")
+    assert r.headers["x-content-type-options"] == "nosniff"
+    assert r.headers["x-frame-options"] == "DENY"
+    assert r.headers["referrer-policy"] == "strict-origin-when-cross-origin"

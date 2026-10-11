@@ -40,10 +40,11 @@ app = FastAPI(
 )
 
 
-
 @app.middleware("http")
 async def cache_api_publik(request: Request, call_next):
-    """Respons GET publik di-cache CDN; permintaan yang membawa token tidak pernah.
+    """Header keamanan dasar, plus cache CDN untuk respons GET publik.
+
+    Permintaan yang membawa token tidak pernah di-cache.
 
     `Vary: Authorization` memisahkan keduanya, sehingga analis yang baru saja
     melabeli ulang berita langsung melihat hasilnya, bukan salinan cache tamu.
@@ -58,6 +59,10 @@ async def cache_api_publik(request: Request, call_next):
             "private, no-store" if request.headers.get("authorization") else CACHE_PUBLIK
         )
         respons.headers["Vary"] = "Authorization"
+    respons.headers.setdefault("X-Content-Type-Options", "nosniff")
+    respons.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    # Dasbor punya halaman masuk; jangan sampai bisa dibingkai situs lain (clickjacking).
+    respons.headers.setdefault("X-Frame-Options", "DENY")
     return respons
 
 
