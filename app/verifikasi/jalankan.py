@@ -183,13 +183,15 @@ def jalankan_verifikasi(
     hari: int = 30,
     kode: str | None = None,
     paksa: bool = False,
+    sampai: datetime | None = None,
 ) -> HasilVerifikasi:
     """Menjalankan verifikasi untuk satu emiten atau seluruh emiten aktif.
 
     Kegagalan pada satu emiten dicatat lalu dilewati, mengikuti pola yang sama
-    dengan siklus pengumpulan berita (NF-03).
+    dengan siklus pengumpulan berita (NF-03). `sampai` default-nya sekarang;
+    diisi untuk memverifikasi ulang periode lampau atau di pengujian.
     """
-    sampai = datetime.now(timezone.utc)
+    sampai = sampai or datetime.now(timezone.utc)
     mulai = sampai - timedelta(days=hari)
 
     kueri = select(Emiten).where(Emiten.aktif.is_(True))

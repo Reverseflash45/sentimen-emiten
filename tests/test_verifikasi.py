@@ -30,6 +30,8 @@ from app.verifikasi.pencocok import bahasa_spekulatif, cari_kecocokan, kemiripan
 from app.verifikasi.sumber import PengumumanMentah, SumberCsv, SumberIdx
 
 WAKTU = datetime(2026, 9, 10, 4, 0, tzinfo=timezone.utc)
+# Akhir jendela verifikasi dipatok, supaya pengujian tidak bergantung pada tanggal hari ini.
+SAMPAI = WAKTU + timedelta(days=5)
 
 
 # --------------------------------------------------------------- pencocokan teks
@@ -170,7 +172,7 @@ def test_berita_cocok_jadi_terkonfirmasi(db):
     sumber = SumberPalsu([
         PengumumanMentah("BBCA", "Pembagian Dividen Interim Perseroan", "http://idx/1", WAKTU)
     ])
-    hasil = jalankan_verifikasi(db, sumber, hari=30)
+    hasil = jalankan_verifikasi(db, sumber, hari=30, sampai=SAMPAI)
 
     assert hasil.terkonfirmasi == 1
     assert db.scalar(select(Berita)).status_verifikasi is StatusVerifikasi.TERKONFIRMASI_RESMI
@@ -181,7 +183,7 @@ def test_jejak_menyimpan_pengumuman_yang_dipakai(db):
     sumber = SumberPalsu([
         PengumumanMentah("BBCA", "Pembagian Dividen Interim Perseroan", "http://idx/2", WAKTU)
     ])
-    jalankan_verifikasi(db, sumber, hari=30)
+    jalankan_verifikasi(db, sumber, hari=30, sampai=SAMPAI)
 
     jejak = db.scalar(select(VerifikasiBerita))
     assert jejak.otomatis is True
@@ -193,7 +195,7 @@ def test_jejak_menyimpan_pengumuman_yang_dipakai(db):
 def test_kabar_spekulatif_tanpa_pengumuman_jadi_rumor(db):
     _berita(db, "BBCA dikabarkan akan mengakuisisi bank daerah", "http://u/3",
             ringkasan="Isu ini santer beredar di kalangan pelaku pasar")
-    hasil = jalankan_verifikasi(db, SumberPalsu([]), hari=30)
+    hasil = jalankan_verifikasi(db, SumberPalsu([]), hari=30, sampai=SAMPAI)
 
     assert hasil.ditandai_rumor == 1
     assert db.scalar(select(Berita)).status_verifikasi is StatusVerifikasi.RUMOR_BELUM_TERKONFIRMASI
@@ -202,7 +204,7 @@ def test_kabar_spekulatif_tanpa_pengumuman_jadi_rumor(db):
 def test_berita_biasa_tanpa_pengumuman_dibiarkan(db):
     """Tidak adanya pengumuman resmi bukan bukti kabarnya salah."""
     _berita(db, "BBCA membuka kantor cabang baru di Kediri", "http://u/4")
-    hasil = jalankan_verifikasi(db, SumberPalsu([]), hari=30)
+    hasil = jalankan_verifikasi(db, SumberPalsu([]), hari=30, sampai=SAMPAI)
 
     assert hasil.dibiarkan == 1
     assert hasil.ditandai_rumor == 0
@@ -217,7 +219,7 @@ def test_keputusan_analis_tidak_ditimpa(db):
     sumber = SumberPalsu([
         PengumumanMentah("BBCA", "Pembagian Dividen Interim Perseroan", "http://idx/5", WAKTU)
     ])
-    hasil = jalankan_verifikasi(db, sumber, hari=30)
+    hasil = jalankan_verifikasi(db, sumber, hari=30, sampai=SAMPAI)
 
     assert hasil.berita_diperiksa == 0
     assert db.scalar(select(Berita)).status_verifikasi is StatusVerifikasi.RUMOR_BELUM_TERKONFIRMASI
@@ -231,7 +233,7 @@ def test_paksa_menilai_ulang_status_yang_sudah_ada(db):
     sumber = SumberPalsu([
         PengumumanMentah("BBCA", "Pembagian Dividen Interim Perseroan", "http://idx/6", WAKTU)
     ])
-    jalankan_verifikasi(db, sumber, hari=30, paksa=True)
+    jalankan_verifikasi(db, sumber, hari=30, paksa=True, sampai=SAMPAI)
 
     assert db.scalar(select(Berita)).status_verifikasi is StatusVerifikasi.TERKONFIRMASI_RESMI
 
@@ -241,8 +243,8 @@ def test_pengumuman_tidak_diduplikasi(db):
     sumber = SumberPalsu([
         PengumumanMentah("BBCA", "Pembagian Dividen Interim Perseroan", "http://idx/7", WAKTU)
     ])
-    jalankan_verifikasi(db, sumber, hari=30)
-    jalankan_verifikasi(db, sumber, hari=30, paksa=True)
+    jalankan_verifikasi(db, sumber, hari=30, sampai=SAMPAI)
+    jalankan_verifikasi(db, sumber, hari=30, paksa=True, sampai=SAMPAI)
 
     assert len(list(db.scalars(select(KeterbukaanInformasi)))) == 1
 
@@ -260,5 +262,5 @@ def test_emiten_gagal_tidak_menghentikan_yang_lain(db):
                 raise RuntimeError("endpoint BEI menolak")
             return []
 
-    hasil = jalankan_verifikasi(db, SumberRewel(), hari=30)
+    hasil = jalankan_verifikasi(db, SumberRewel(), hari=30, sampai=SAMPAI)
     assert len(hasil.gagal) == 1 and "BBCA" in hasil.gagal[0]
