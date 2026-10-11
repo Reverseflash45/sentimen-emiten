@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -25,6 +25,11 @@ from app.api import watchlist as router_watchlist
 
 STATIS = Path(__file__).parent / "static"
 
+# Data publik ini sama untuk semua pengunjung tamu dan hanya berubah saat siklus
+# pengumpulan atau saat analis melabeli ulang, jadi boleh disimpan sebentar di CDN.
+API_PUBLIK = ("/api/peringkat", "/api/emiten", "/api/berita", "/api/ringkasan", "/api/rentang-data")
+CACHE_PUBLIK = "public, max-age=0, s-maxage=120, stale-while-revalidate=600"
+
 app = FastAPI(
     title="Analisis Sentimen Berita Emiten",
     version="0.5.0",
@@ -33,6 +38,28 @@ app = FastAPI(
         "pergerakan harga. Sistem tidak melakukan prediksi harga (SRS 10.3)."
     ),
 )
+
+
+
+@app.middleware("http")
+async def cache_api_publik(request: Request, call_next):
+    """Respons GET publik di-cache CDN; permintaan yang membawa token tidak pernah.
+
+    `Vary: Authorization` memisahkan keduanya, sehingga analis yang baru saja
+    melabeli ulang berita langsung melihat hasilnya, bukan salinan cache tamu.
+    """
+    respons = await call_next(request)
+    if (
+        request.method == "GET"
+        and request.url.path.startswith(API_PUBLIK)
+        and respons.status_code == 200
+    ):
+        respons.headers["Cache-Control"] = (
+            "private, no-store" if request.headers.get("authorization") else CACHE_PUBLIK
+        )
+        respons.headers["Vary"] = "Authorization"
+    return respons
+
 
 app.include_router(router_sistem.router)
 app.include_router(router_auth.router)

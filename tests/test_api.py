@@ -666,3 +666,28 @@ def test_ambang_watchlist_bisa_diatur(klien, biasa):
     assert r.json()["ambang"] == 0.5
     assert klien.post("/api/watchlist", json={"kode_emiten": "BBCA", "ambang": 0.01},
                       headers=biasa).status_code == 422
+
+
+# ---------- cache CDN ----------
+def test_api_publik_untuk_tamu_boleh_di_cache(klien):
+    from app.main import CACHE_PUBLIK
+
+    for url in ("/api/emiten", "/api/emiten/BBCA", "/api/ringkasan"):
+        r = klien.get(url)
+        assert r.status_code == 200
+        assert r.headers["cache-control"] == CACHE_PUBLIK
+        assert r.headers["vary"] == "Authorization"
+
+
+def test_permintaan_bertoken_tidak_pernah_di_cache(klien):
+    r = klien.get("/api/emiten", headers=_kepala(klien, "analis@uji.test"))
+    assert r.status_code == 200
+    assert r.headers["cache-control"] == "private, no-store"
+    assert r.headers["vary"] == "Authorization"
+
+
+def test_endpoint_pribadi_dan_penulisan_tidak_di_cache(klien):
+    r = klien.get("/api/watchlist", headers=_kepala(klien, "biasa@uji.test"))
+    assert "s-maxage" not in r.headers.get("cache-control", "")
+    r = klien.get("/api/emiten/TIDAKADA")
+    assert "s-maxage" not in r.headers.get("cache-control", "")
