@@ -1,7 +1,8 @@
 # Sistem Analisis Sentimen Berita Emiten
 
-Implementasi dari SRS Proyek 1 — Analisa dan Desain Perangkat Lunak,
-D4 Teknik Informatika, Fakultas Vokasi Universitas Airlangga.
+Proyek pribadi untuk memantau sentimen berita saham LQ45 dan menyandingkannya dengan
+pergerakan harga. Kebutuhannya dirumuskan lebih dulu dalam dokumen spesifikasi
+kebutuhan (SRS); nomor-nomor seperti UC-01 atau NF-09 di kode merujuk ke dokumen itu.
 
 **Tahap saat ini: pipeline data + analitik + API & dasbor.** Pengumpulan berita,
 pemetaan ke emiten, pelabelan sentimen (baseline leksikon), penyimpanan harga,

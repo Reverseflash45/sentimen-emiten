@@ -1,4 +1,4 @@
-"""Skema basis data — mengikuti entitas pada SRS Proyek 1.
+"""Skema basis data — mengikuti entitas pada SRS proyek ini.
 
 Catatan desain:
 - Satu berita bisa terkait lebih dari satu emiten (SRS 10.1 butir 2),
