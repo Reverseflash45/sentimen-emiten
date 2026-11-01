@@ -97,7 +97,8 @@ svg { flex: none; }
 .status-isi b { font-weight: 650; }
 .status .pisah { color: var(--garis-kuat); margin: 0 8px; }
 
-main { max-width: 1360px; margin: 0 auto; padding: 16px clamp(16px, 3vw, 28px) 56px; }
+/* min-height: kaki halaman tidak tampil di tengah layar lalu terdorong saat data datang */
+main { max-width: 1360px; margin: 0 auto; padding: 16px clamp(16px, 3vw, 28px) 56px; min-height: 100vh; }
 
 /* ---------- kendali ---------- */
 input, select, button { font: inherit; color: inherit; }
