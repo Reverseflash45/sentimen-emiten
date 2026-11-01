@@ -10,13 +10,13 @@
   --garis-kuat: #d2cec5;
   --teks: #1a1a19;
   --redup: #5f5d58;
-  --samar: #8e8b84;
+  --samar: #6c6a63; /* ≥4,5:1 di atas putih, latar, dan permukaan-2 */
   --tinta: #1a1a19;          /* tombol utama, segmen aktif */
   --tinta-isi: #ffffff;
   --tautan: #2450c8;
   --positif: #11795a;
   --negatif: #c23a2e;
-  --netral: #8a877f;
+  --netral: #6f6c66;
   --kuning: #a16207;
   --bayang: 0 12px 32px -12px rgba(26, 26, 25, 0.22);
   --radius: 8px;
@@ -33,7 +33,7 @@
     --garis-kuat: #3d3c38;
     --teks: #ecebe7;
     --redup: #a5a29b;
-    --samar: #77746e;
+    --samar: #96938c;
     --tinta: #ecebe7;
     --tinta-isi: #151514;
     --tautan: #8fb0ff;
@@ -446,6 +446,7 @@ table.peringkat .opsional { display: none; }
 
 footer { border-top: 1px solid var(--garis); padding: 18px clamp(16px, 3vw, 28px) 26px; color: var(--samar); font-size: 12.5px; }
 footer p { max-width: 1360px; margin: 2px auto; }
+footer a { text-decoration: underline; text-underline-offset: 2px; }
 
 /* ---------- layar sedang & kecil ---------- */
 @media (max-width: 1080px) {
