@@ -276,6 +276,16 @@ def test_dasbor_tersaji(klien):
     assert "Sentimen Emiten" in r.text
 
 
+def test_robots_dan_sitemap(klien):
+    r = klien.get("/robots.txt")
+    assert r.status_code == 200
+    assert "Disallow: /api/" in r.text
+    assert "Sitemap: https://sentimen.raffstw.my.id/sitemap.xml" in r.text
+    s = klien.get("/sitemap.xml")
+    assert s.headers["content-type"].startswith("application/xml")
+    assert "<loc>https://sentimen.raffstw.my.id/</loc>" in s.text
+
+
 # ------------------------------------------------ endpoint verifikasi (UC-04)
 
 

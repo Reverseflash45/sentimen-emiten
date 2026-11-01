@@ -10,7 +10,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from fastapi import FastAPI, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from app.api import admin as router_admin
@@ -82,3 +82,25 @@ if STATIS.is_dir():
     @app.get("/", include_in_schema=False)
     def dasbor() -> FileResponse:
         return FileResponse(STATIS / "index.html")
+
+
+SITUS = "https://sentimen.raffstw.my.id"
+
+
+@app.get("/robots.txt", include_in_schema=False)
+def robots() -> PlainTextResponse:
+    # API dan dokumentasinya tidak perlu masuk indeks mesin pencari.
+    return PlainTextResponse(
+        f"User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /docs\n\nSitemap: {SITUS}/sitemap.xml\n"
+    )
+
+
+@app.get("/sitemap.xml", include_in_schema=False)
+def sitemap() -> Response:
+    return Response(
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+        f"  <url><loc>{SITUS}/</loc><changefreq>daily</changefreq></url>\n"
+        "</urlset>\n",
+        media_type="application/xml",
+    )
